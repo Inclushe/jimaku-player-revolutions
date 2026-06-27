@@ -99,7 +99,7 @@ Looking words up mid-episode is only half the loop — the other half is actuall
 
 The userscript is a single self-contained file at `jimaku-player-reloaded.user.js`. No build step. Edit it, save, refresh.
 
-It runs on every page (`@match *://*/*`) but does nothing until a Vidstack `<media-player>` is found. When one appears, it:
+It runs on every page (`@match *://*/*`) but does nothing until a Vidstack `<media-player>` is found. A single `watch()` loop — driven by a `MutationObserver`, history events (`popstate`/`hashchange`), and a 1s heartbeat — handles late-loading players and SPA sites that swap the player or change the URL between episodes without a reload. When a player appears (or a new episode is detected), it:
 
 - Mounts the UI (overlay, **字** button, panel) inside the `<media-player>` element.
 - Polls the underlying `<video>` element for the current time and to seek — this is the most reliable, sandbox-safe time source across providers.
