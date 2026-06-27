@@ -13,6 +13,9 @@ Built for studying Japanese with anime.
 
 - Activates automatically whenever a Vidstack `<media-player>` is present on the page.
 - **Auto-finds and loads the right subtitle file for the current episode** (on by default) — searches jimaku.cc on load and picks the best match by parsing each result's filename. Toggle in Settings.
+  - Excludes Chinese subtitle files (`[CHS]` / `[CHT]`) by default.
+  - Sticks to the release group you first used for a show, so later episodes match it automatically (shown under Browse).
+- Lets you inject **custom CSS** (Settings) to restyle the overlay, panel, or the page's player.
 - Pre-fills a search box from the page title (best-effort), or you type the show yourself.
 - Searches [jimaku.cc](https://jimaku.cc) for matching Japanese subtitle files.
 - Lists the files with WEB / BD / ASS tags so you can pick the one closest to your stream.
