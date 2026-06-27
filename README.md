@@ -12,6 +12,7 @@ Built for studying Japanese with anime.
 ## What it does
 
 - Activates automatically whenever a Vidstack `<media-player>` is present on the page.
+- **Auto-finds and loads the right subtitle file for the current episode** (on by default) — searches jimaku.cc on load and picks the best match by parsing each result's filename. Toggle in Settings.
 - Pre-fills a search box from the page title (best-effort), or you type the show yourself.
 - Searches [jimaku.cc](https://jimaku.cc) for matching Japanese subtitle files.
 - Lists the files with WEB / BD / ASS tags so you can pick the one closest to your stream.
@@ -41,9 +42,11 @@ Stored locally only. Never sent anywhere except jimaku.cc itself.
 ## Use
 
 1. Open an episode on any site that uses Vidstack Player.
-2. Hover the player (top right corner) → click **字** (or press **`J`**).
-3. **Browse** tab — the search box is pre-filled from the page title when possible; otherwise type the show name and episode. Pick a file from the list (WEB-tagged ones tend to align best with streaming sources).
+2. With **auto-load** on (the default), the script searches jimaku.cc and loads the best file for the detected episode automatically — you may not need to do anything. A toast confirms what was loaded.
+3. To choose manually: hover the player (top right corner) → click **字** (or press **`J`**) → **Browse** tab. The search box is pre-filled from the page title when possible; otherwise type the show name and episode. Pick a file from the list (WEB-tagged ones tend to align best with streaming sources).
 4. Subtitles appear at the bottom of the video.
+
+Auto-load needs an API key and a detectable episode number; when it can't confidently match the show or episode, it stays out of the way and waits for you to pick. Manually loading a file always wins over auto-load for that episode.
 
 ### Sync in one keypress
 
@@ -105,11 +108,14 @@ It runs on every page (`@match *://*/*`) but does nothing until a Vidstack `<med
 
 State is stored in `localStorage` (`jp:*` keys) so it works in userscript managers that don't expose `GM_setValue` (notably Userscripts.app on Safari). Per-show data (alignment, chosen entry) is keyed on `hostname + show title`.
 
+The native [anitomy](https://github.com/yjl9903/anitomy) filename parser is vendored verbatim at the bottom of the file (`makeAnitomy()`), wrapped in a CommonJS shim and instantiated lazily on first use. It powers auto-load's per-episode file matching — no WASM, no network, fully synchronous. To update it, replace that block with a fresh build of `anitomy`'s `dist/index.cjs`.
+
 ## Credits
 
 - **[sheodox/jimaku-player](https://github.com/sheodox/jimaku-player)** — original userscript and the SRT/ASS parser logic. Read the original for VRV nostalgia.
 - **[jimaku.cc](https://jimaku.cc)** — the Japanese-subtitle archive and API this script depends on.
 - **[jisho.org](https://jisho.org)** — Japanese-English dictionary used for word lookups.
+- **[yjl9903/anitomy](https://github.com/yjl9903/anitomy)** — native JavaScript port of Anitomy (MIT), vendored into the script to parse release filenames for auto-loading.
 
 ## License
 
