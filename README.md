@@ -93,7 +93,7 @@ Looking words up mid-episode is only half the loop — the other half is actuall
 ## Limitations
 
 - **Burned-in subtitles can't be removed.** If a site ships hard-subbed video, those stay. The script can hide Vidstack's own caption track (Settings → it disables the player's native captions), or you can move our subtitles to the top (Settings → Position).
-- **One subtitle per visible cue.** ASS positioning / styling is partially supported; complex karaoke effects render plainly.
+- **ASS positioning / styling is partially supported;** complex karaoke effects render plainly. Lines that overlap in time (including `.ass` lines sharing a start timestamp) are stacked and shown together.
 - **Auto-detection is best-effort.** The show name is guessed from the page title (`og:title` / `<h1>` / `<title>` / the player's `title` attribute), so on many sites you'll need to type the show + episode into the search box yourself.
 - **Provider must expose a `<video>` element.** HTML / HLS / DASH providers work; YouTube / Vimeo iframe providers don't expose a readable `<video>`, so time-sync won't work there.
 - **jimaku.cc rate limit:** 25 requests / minute per key. Plenty for normal use; if you hammer the search box you'll get throttled briefly.

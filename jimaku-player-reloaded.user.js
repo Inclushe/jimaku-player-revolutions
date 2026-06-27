@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jimaku Player Reloaded
 // @namespace    https://github.com/mgp25/jimaku-player-reloaded
-// @version      3.3.0
+// @version      3.4.0
 // @description  Browse, download, and align Japanese subtitles inside any Vidstack-based player using jimaku.cc. Auto-finds the right file for the current episode.
 // @author       mgp25
 // @match        *://*/*
@@ -560,7 +560,7 @@
 		display: none;
 		max-width: 92%; padding: 6px 14px;
 		font-size: calc(2.4vw * var(--jp-scale, 1));
-		line-height: 1.45; color: #fff; white-space: pre-wrap;
+		line-height: 1.45; color: #fff; white-space: pre-wrap; text-align: center;
 		text-shadow: -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 0 10px rgba(0,0,0,.85);
 		background: rgba(0,0,0,.35); border-radius: 4px;
 		pointer-events: auto; cursor: pointer;
@@ -1331,14 +1331,18 @@
 			return;
 		}
 		const t = state.videoTimeMs + state.alignment;
-		const idx = findSubIndex(t);
-		if (idx >= 0) {
-			const sub = state.subtitles[idx];
-			if (el && el.textContent !== sub.text) el.textContent = sub.text;
+		const active = findActiveSubs(t);
+		if (active.length) {
+			// Multiple lines can be active at once (e.g. .ass lines that share a
+			// starting timestamp) — show them all, one per row.
+			const text = active.map((i) => state.subtitles[i].text).join('\n');
+			if (el && el.textContent !== text) el.textContent = text;
 			if (el) el.style.display = 'inline-block';
+			const idx = active[0];
 			if (idx !== state.currentSubIndex) {
 				state.currentSubIndex = idx;
-				state.history = [sub, ...state.history.slice(0, 9)];
+				const fresh = active.map((i) => state.subtitles[i]);
+				state.history = [...fresh.reverse(), ...state.history].slice(0, 10);
 			}
 		} else {
 			if (el) {
@@ -1360,6 +1364,33 @@
 			else return mid;
 		}
 		return -1;
+	}
+	// All subtitles active at time t, in array order. Subtitles are sorted by
+	// start, so every active line lives in the prefix where start <= t; we walk
+	// that prefix back from the last such entry and keep the ones still on-screen.
+	function findActiveSubs(t) {
+		const a = state.subtitles;
+		// Rightmost index whose start <= t.
+		let lo = 0;
+		let hi = a.length - 1;
+		let last = -1;
+		while (lo <= hi) {
+			const mid = (lo + hi) >> 1;
+			if (a[mid].start <= t) {
+				last = mid;
+				lo = mid + 1;
+			} else {
+				hi = mid - 1;
+			}
+		}
+		const out = [];
+		// No subtitle realistically lasts longer than this, so we can stop walking
+		// back once a line started more than the window before t.
+		const WINDOW_MS = 60000;
+		for (let i = last; i >= 0 && a[i].start >= t - WINDOW_MS; i--) {
+			if (a[i].end >= t) out.unshift(i);
+		}
+		return out;
 	}
 
 	let toastEl;
