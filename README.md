@@ -26,7 +26,7 @@ Works in any major userscript manager:
 - **Chrome / Firefox / Edge:** [Tampermonkey](https://www.tampermonkey.net/) or [Violentmonkey](https://violentmonkey.github.io/).
 - **Safari:** [Userscripts](https://apps.apple.com/app/userscripts/id1463298887) (free, open-source).
 
-Then install the script from `jimaku-player-reloaded.js` (open the file → your manager will prompt you to install). Or paste the file contents into a new script in the manager dashboard.
+Then install the script from `jimaku-player-reloaded.user.js` (open the file → your manager will prompt you to install). Or paste the file contents into a new script in the manager dashboard.
 
 The script runs on every site (`@match *://*/*`) but stays completely idle until it detects a Vidstack `<media-player>` on the page, at which point the **字** button appears on the player.
 
@@ -94,7 +94,7 @@ Looking words up mid-episode is only half the loop — the other half is actuall
 
 ## Development
 
-The userscript is a single self-contained file at `jimaku-player-reloaded.js`. No build step. Edit it, save, refresh.
+The userscript is a single self-contained file at `jimaku-player-reloaded.user.js`. No build step. Edit it, save, refresh.
 
 It runs on every page (`@match *://*/*`) but does nothing until a Vidstack `<media-player>` is found. When one appears, it:
 

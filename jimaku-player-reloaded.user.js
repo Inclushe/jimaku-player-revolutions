@@ -20,11 +20,12 @@
 
 	const TAG = '[jimaku]';
 	const log = (...a) => console.log(TAG, ...a);
+	const info = (...a) => console.info(TAG, ...a);
 	const warn = (...a) => console.warn(TAG, ...a);
 
 	try { window.addEventListener('error', (e) => warn('uncaught', e.message)); } catch {}
 
-	log('boot', location.hostname);
+	info('boot', location.href, 'readyState=' + document.readyState);
 
 	const KEYS = {
 		apiKey: 'jimaku-api-key',
@@ -97,7 +98,7 @@
 		state.videoTimeMs = Math.floor(v.currentTime * 1000);
 		if (!state.videoFound) {
 			state.videoFound = true;
-			log('local video connected', v);
+			info('local video connected', v.tagName, 't=' + v.currentTime);
 			updateVideoStatus();
 		}
 	}, 50);
@@ -468,6 +469,7 @@
 		ensureStyles();
 		const container = findPlayerContainer();
 		if (!container) return false;
+		if (!host) info('container found, mounting into', container.tagName.toLowerCase(), 'position=' + getComputedStyle(container).position);
 
 		const cs = getComputedStyle(container);
 		if (cs.position === 'static') container.style.position = 'relative';
@@ -515,7 +517,7 @@
 
 			document.documentElement.style.setProperty('--jp-scale', String(state.fontScale));
 			renderPanel();
-			log('mounted on player container', container);
+			info('mounted on player container', container.tagName.toLowerCase());
 		}
 		return true;
 	}
@@ -1075,6 +1077,9 @@
 		if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 		if (e.metaKey || e.ctrlKey || e.altKey) return;
 		const k = e.key.toLowerCase();
+		if ('jshibzx'.includes(k)) {
+			info('key', k, 'mediaPlayer=' + document.querySelectorAll('media-player').length, 'mounted=' + !!host);
+		}
 		if (k === 'j') {
 			ensureMounted();
 			togglePanel();
@@ -1096,8 +1101,20 @@
 		}
 	});
 
+	let _lastDiag = 0;
 	function bootstrap() {
 		ensureMounted();
+		const now = Date.now();
+		if (now - _lastDiag > 3000) {
+			_lastDiag = now;
+			const mp = document.querySelectorAll('media-player').length;
+			const mpv = document.querySelectorAll('media-provider').length;
+			const vid = document.querySelectorAll('video').length;
+			// Only chatter while something player-ish is around, or until we mount.
+			if (mp || mpv || vid || host) {
+				info('scan', 'media-player=' + mp, 'media-provider=' + mpv, 'video=' + vid, 'mounted=' + !!host);
+			}
+		}
 	}
 	new MutationObserver(bootstrap).observe(document.documentElement, { childList: true, subtree: true });
 	bootstrap();
