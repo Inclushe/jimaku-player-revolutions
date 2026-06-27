@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jimaku Player Reloaded
 // @namespace    https://github.com/mgp25/jimaku-player-reloaded
-// @version      3.2.0
+// @version      3.2.1
 // @description  Browse, download, and align Japanese subtitles inside any Vidstack-based player using jimaku.cc. Auto-finds the right file for the current episode.
 // @author       mgp25
 // @match        *://*/*
@@ -158,14 +158,18 @@
 			if (u) out.episodeNumber = parseInt(u[1], 10);
 		}
 
-		// Take the first available title and strip a trailing site-brand suffix
-		// (e.g. "My Show - Vidstack") plus a leading "Watch ".
+		// Take the first available title and reduce it to just the show name:
+		// strip a leading "Watch ", a trailing site-brand suffix ("… - Vidstack"),
+		// and any episode marker plus everything after it ("Frieren - Episode 9 -
+		// Self-Awareness" → "Frieren"), so it makes a clean jimaku search query.
 		let raw = candidates[0] || '';
+		raw = raw.replace(/^\s*watch\s+/i, '');
 		const brand = location.hostname.replace(/^www\./, '').split('.')[0] || '';
 		if (brand) {
 			raw = raw.replace(new RegExp('\\s*[\\-–—|:·]\\s*' + escapeRe(brand) + '.*$', 'i'), '');
 		}
-		out.showTitle = clean(raw.replace(/^watch\s+/i, ''));
+		raw = raw.replace(/[\s\-–—|:·]+(?:episode|ep\.?|e|#)\s*\d+.*$/i, '');
+		out.showTitle = clean(raw);
 		out.showKey = (location.hostname + '|' + out.showTitle).toLowerCase();
 		return out;
 	}
@@ -175,6 +179,9 @@
 		const next = detectShow();
 		const changed =
 			!prev || prev.showKey !== next.showKey || prev.episodeNumber !== next.episodeNumber;
+		if (changed && next.showTitle && (!prev || prev.showTitle !== next.showTitle || prev.episodeNumber !== next.episodeNumber)) {
+			info('show grabbed:', JSON.stringify(next.showTitle), '· episode:', next.episodeNumber ?? '(none)');
+		}
 		// Genuine episode change (both sides a real number, and different): drop the
 		// now-stale subtitles so they don't show over the new episode. Guarded
 		// against title flicker to null so we don't wipe subs spuriously.
@@ -394,17 +401,26 @@
 	}
 
 	// Confidently match a jimaku entry to the detected show without user input.
-	// Returns null when ambiguous, so we never auto-load the wrong show.
+	// Returns null when genuinely ambiguous, so we don't auto-load the wrong show.
+	const normTitle = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 	function confidentEntry(list, det) {
 		if (!list || !list.length) return null;
 		const cached = det.showKey ? state.entryCache[det.showKey] : null;
 		const hit = cached && list.find((e) => e.id === cached);
 		if (hit) return hit;
-		const title = (det.showTitle || '').toLowerCase();
-		const exact = list.find(
-			(e) => !e.flags?.unverified && [e.name, e.english_name, e.japanese_name].some((n) => n && n.toLowerCase() === title)
-		);
-		if (exact) return exact;
+		const q = normTitle(det.showTitle);
+		if (!q) return null;
+		const namesOf = (e) => [e.name, e.english_name, e.japanese_name].filter(Boolean).map(normTitle);
+		// Prefer a verified entry over an unverified one at each confidence level.
+		const tiers = [
+			(e) => namesOf(e).includes(q), // exact (normalised)
+			(e) => namesOf(e).some((n) => n.startsWith(q) || q.startsWith(n)), // prefix
+			(e) => namesOf(e).some((n) => n.includes(q) || q.includes(n)), // substring either way
+		];
+		for (const test of tiers) {
+			const m = list.find((e) => !e.flags?.unverified && test(e)) || list.find((e) => test(e));
+			if (m) return m;
+		}
 		return list.length === 1 ? list[0] : null;
 	}
 
@@ -424,12 +440,19 @@
 		autoState.key = key; // claim before awaiting so concurrent ticks dedupe
 		autoState.running = true;
 		try {
+			info('auto: searching jimaku for', JSON.stringify(det.showTitle), '· ep', det.episodeNumber);
 			const list = await jimakuSearch(det.showTitle);
 			const entry = confidentEntry(list, det);
 			if (!entry) {
-				log('auto: no confident entry for', det.showTitle);
+				info(
+					'auto: no confident entry for',
+					JSON.stringify(det.showTitle),
+					'· results:',
+					(list || []).map((e) => e.name)
+				);
 				return;
 			}
+			info('auto: matched entry', JSON.stringify(entry.name), '(id', entry.id + ')');
 			state.entries = list || [];
 			state.selectedEntry = entry;
 			if (det.showKey) {
@@ -440,11 +463,12 @@
 			state.files = files || [];
 			const best = pickBestFile(state.files, det.episodeNumber);
 			if (!best) {
-				log('auto: no suitable file for ep', det.episodeNumber);
+				info('auto: no suitable file for ep', det.episodeNumber, '· files:', state.files.map((f) => f.name));
 				return;
 			}
 			const text = await jimakuDownload(best.url);
 			applySubs(parseByName(text, best.name), best.name);
+			info('auto: loaded', JSON.stringify(best.name));
 			toast(`Auto-loaded ${best.name}`);
 			pulseFab();
 		} catch (e) {
