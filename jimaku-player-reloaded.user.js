@@ -75,8 +75,13 @@
 		ui: { panelOpen: false, tab: 'browse', loading: '', error: '' },
 	};
 
+	// Vidstack can render either as the <media-player> custom element or as a
+	// plain element carrying the data-media-player attribute (the data-* form is
+	// what sites using the CSS/default-layout build produce). Match both.
+	const PLAYER_SEL = 'media-player, [data-media-player]';
+	const PROVIDER_SEL = 'media-provider, [data-media-provider]';
 	function findVidstackPlayer() {
-		return document.querySelector('media-player');
+		return document.querySelector(PLAYER_SEL);
 	}
 	function getLocalVideo() {
 		const player = findVidstackPlayer();
@@ -84,7 +89,7 @@
 			const v = player.querySelector('video');
 			if (v) return v;
 		}
-		return document.querySelector('media-provider video') || document.querySelector('video');
+		return document.querySelector(PROVIDER_SEL + ' video') || document.querySelector('video');
 	}
 	const seekTo = (timeMs) => {
 		const t = Math.max(0, timeMs);
@@ -1078,7 +1083,7 @@
 		if (e.metaKey || e.ctrlKey || e.altKey) return;
 		const k = e.key.toLowerCase();
 		if ('jshibzx'.includes(k)) {
-			info('key', k, 'mediaPlayer=' + document.querySelectorAll('media-player').length, 'mounted=' + !!host);
+			info('key', k, 'player=' + document.querySelectorAll(PLAYER_SEL).length, 'mounted=' + !!host);
 		}
 		if (k === 'j') {
 			ensureMounted();
@@ -1107,8 +1112,8 @@
 		const now = Date.now();
 		if (now - _lastDiag > 3000) {
 			_lastDiag = now;
-			const mp = document.querySelectorAll('media-player').length;
-			const mpv = document.querySelectorAll('media-provider').length;
+			const mp = document.querySelectorAll(PLAYER_SEL).length;
+			const mpv = document.querySelectorAll(PROVIDER_SEL).length;
 			const vid = document.querySelectorAll('video').length;
 			// Only chatter while something player-ish is around, or until we mount.
 			if (mp || mpv || vid || host) {
