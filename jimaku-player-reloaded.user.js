@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jimaku Player Reloaded
 // @namespace    https://github.com/mgp25/jimaku-player-reloaded
-// @version      3.1.0
+// @version      3.2.0
 // @description  Browse, download, and align Japanese subtitles inside any Vidstack-based player using jimaku.cc. Auto-finds the right file for the current episode.
 // @author       mgp25
 // @match        *://*/*
@@ -171,12 +171,26 @@
 	}
 
 	function refreshDetection() {
+		const prev = state.detected;
 		const next = detectShow();
 		const changed =
-			!state.detected ||
-			state.detected.showKey !== next.showKey ||
-			state.detected.episodeNumber !== next.episodeNumber;
+			!prev || prev.showKey !== next.showKey || prev.episodeNumber !== next.episodeNumber;
+		// Genuine episode change (both sides a real number, and different): drop the
+		// now-stale subtitles so they don't show over the new episode. Guarded
+		// against title flicker to null so we don't wipe subs spuriously.
+		const epChanged =
+			prev &&
+			prev.episodeNumber != null &&
+			next.episodeNumber != null &&
+			(prev.episodeNumber !== next.episodeNumber || prev.showKey !== next.showKey);
 		state.detected = next;
+		if (epChanged && state.subtitles.length) {
+			state.subtitles = [];
+			state.subtitlesFile = '';
+			state.history = [];
+			state.currentSubIndex = -1;
+			updateVideoStatus();
+		}
 		if (changed) {
 			if (next.showKey && typeof state.alignByShow[next.showKey] === 'number') {
 				state.alignment = state.alignByShow[next.showKey];
@@ -185,9 +199,6 @@
 		}
 		maybeAutoLoad();
 	}
-
-	new MutationObserver(refreshDetection).observe(document.documentElement, { subtree: true, childList: true });
-	refreshDetection();
 
 	function normalize(text) {
 		if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
@@ -1238,9 +1249,33 @@
 		}
 	});
 
+	// Single watcher driving everything. Vidstack often mounts late, and SPA
+	// sites swap the player / change the URL between episodes without a reload —
+	// none of which fire a reliable single DOM event. So we re-check on DOM
+	// mutations, on history events, and on a 1s heartbeat. Each concern is
+	// idempotent and guarded, so re-running is cheap:
+	//   - ensureMounted(): mounts when the player appears, remounts if swapped.
+	//   - refreshDetection(): re-reads title/episode (also catches async-populated
+	//     titles and SPA navigation) and fires maybeAutoLoad() when ready.
 	let _lastDiag = 0;
-	function bootstrap() {
+	let lastHref = '';
+	let lastPlayerSeen = false;
+	function watch() {
 		ensureMounted();
+		refreshDetection();
+
+		const hasPlayer = !!findVidstackPlayer();
+		if (hasPlayer !== lastPlayerSeen) {
+			lastPlayerSeen = hasPlayer;
+			info(hasPlayer ? 'vidstack player detected' : 'vidstack player gone');
+			if (hasPlayer) state.videoFound = false; // bind the new instance's <video>
+		}
+		if (location.href !== lastHref) {
+			if (lastHref) info('navigation', location.href);
+			lastHref = location.href;
+			state.videoFound = false; // SPA episode change: <video> likely replaced
+		}
+
 		const now = Date.now();
 		if (now - _lastDiag > 3000) {
 			_lastDiag = now;
@@ -1253,9 +1288,21 @@
 			}
 		}
 	}
-	new MutationObserver(bootstrap).observe(document.documentElement, { childList: true, subtree: true });
-	bootstrap();
-	setInterval(bootstrap, 1000);
+	// Coalesce mutation bursts (SPA pages churn the DOM heavily) to one run/frame.
+	let _watchScheduled = false;
+	function scheduleWatch() {
+		if (_watchScheduled) return;
+		_watchScheduled = true;
+		requestAnimationFrame(() => {
+			_watchScheduled = false;
+			watch();
+		});
+	}
+	new MutationObserver(scheduleWatch).observe(document.documentElement, { childList: true, subtree: true });
+	window.addEventListener('popstate', watch);
+	window.addEventListener('hashchange', watch);
+	watch();
+	setInterval(watch, 1000);
 	setInterval(tick, 50);
 
 	/* ===================================================================
