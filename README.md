@@ -2,21 +2,22 @@
 ## 字幕プレーヤー・リローデッド
 
 <p align="center">
-  <img src="assets/screenshot.png" alt="Jimaku Player Reloaded rendering a Japanese subtitle over a Crunchyroll episode">
+  <img src="assets/screenshot.png" alt="Jimaku Player Reloaded rendering a Japanese subtitle over a video">
 </p>
 
-A userscript that adds a Japanese-subtitle layer to the Crunchyroll player. It browses [jimaku.cc](https://jimaku.cc), downloads `.srt` / `.ass` / `.vtt` files for the show you're watching, and renders them on top of the video — synced with one keypress.
+A userscript that adds a Japanese-subtitle layer to **any site that uses [Vidstack Player](https://vidstack.io)**. It browses [jimaku.cc](https://jimaku.cc), downloads `.srt` / `.ass` / `.vtt` files for the show you're watching, and renders them on top of the video — synced with one keypress.
 
 Built for studying Japanese with anime.
 
 ## What it does
 
-- Detects the show + episode from the Crunchyroll URL/page automatically.
+- Activates automatically whenever a Vidstack `<media-player>` is present on the page.
+- Pre-fills a search box from the page title (best-effort), or you type the show yourself.
 - Searches [jimaku.cc](https://jimaku.cc) for matching Japanese subtitle files.
-- Lists the files with WEB / BD / ASS tags so you can pick the one closest to Crunchyroll's stream.
+- Lists the files with WEB / BD / ASS tags so you can pick the one closest to your stream.
 - Renders the subtitles directly over the video. Click a line to open it in [jisho.org](https://jisho.org).
 - Sync them to the audio with a single keypress.
-- Remembers your alignment per show, so episodes 2..N inherit it.
+- Remembers your alignment per show + site, so episodes 2..N inherit it.
 
 ## Install
 
@@ -25,21 +26,23 @@ Works in any major userscript manager:
 - **Chrome / Firefox / Edge:** [Tampermonkey](https://www.tampermonkey.net/) or [Violentmonkey](https://violentmonkey.github.io/).
 - **Safari:** [Userscripts](https://apps.apple.com/app/userscripts/id1463298887) (free, open-source).
 
-Then install the script from `dist/jimaku-player.user.js` (open the file → your manager will prompt you to install). Or paste the file contents into a new script in the manager dashboard.
+Then install the script from `jimaku-player-reloaded.js` (open the file → your manager will prompt you to install). Or paste the file contents into a new script in the manager dashboard.
+
+The script runs on every site (`@match *://*/*`) but stays completely idle until it detects a Vidstack `<media-player>` on the page, at which point the **字** button appears on the player.
 
 ## Setup (one time)
 
 1. Open <https://jimaku.cc> and create an account.
 2. Go to <https://jimaku.cc/profile> and copy your API key.
-3. On any Crunchyroll watch page, hover the player → click the small **字** button at the top-right → **Settings** tab → paste the key → **Save**.
+3. On any page with a Vidstack player, hover the player → click the small **字** button at the top-right → **Settings** tab → paste the key → **Save**.
 
 Stored locally only. Never sent anywhere except jimaku.cc itself.
 
 ## Use
 
-1. Open any episode on Crunchyroll.
+1. Open an episode on any site that uses Vidstack Player.
 2. Hover the player (top right corner) → click **字** (or press **`J`**).
-3. **Browse** tab — the show + episode are pre-filled. Pick a file from the list (WEB-tagged ones tend to align best with Crunchyroll).
+3. **Browse** tab — the search box is pre-filled from the page title when possible; otherwise type the show name and episode. Pick a file from the list (WEB-tagged ones tend to align best with streaming sources).
 4. Subtitles appear at the bottom of the video.
 
 ### Sync in one keypress
@@ -73,7 +76,7 @@ Clicking a rendered subtitle opens [jisho.org](https://jisho.org) for that text.
 
 <a href="https://apps.apple.com/es/app/meku/id6759989326?l=en-GB"><img src="https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/4f/02/52/4f02526b-c1c1-b7fe-46da-b18fbe2f7718/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg" width="96" align="right" alt="Meku app icon"></a>
 
-Looking words up mid-episode is only half the loop — the other half is actually retaining them. [**Meku**](https://apps.apple.com/es/app/meku/id6759989326?l=en-GB) (iOS) is a flashcards app built for exactly this: drop in the vocab and sentences you find while watching, and review them later. Pairs naturally with this script — encounter a word on Crunchyroll, look it up on jisho, drill it on Meku.
+Looking words up mid-episode is only half the loop — the other half is actually retaining them. [**Meku**](https://apps.apple.com/es/app/meku/id6759989326?l=en-GB) (iOS) is a flashcards app built for exactly this: drop in the vocab and sentences you find while watching, and review them later. Pairs naturally with this script — encounter a word while watching, look it up on jisho, drill it on Meku.
 
 <p align="center">
   <a href="https://apps.apple.com/es/app/meku/id6759989326?l=en-GB">
@@ -83,22 +86,24 @@ Looking words up mid-episode is only half the loop — the other half is actuall
 
 ## Limitations
 
-- **Burned-in subtitles can't be removed.** Crunchyroll does not allow to disable their own subtitles
-**Japanese** for a cleaner stream, or move our subtitles to the top (Settings → Position).
+- **Burned-in subtitles can't be removed.** If a site ships hard-subbed video, those stay. The script can hide Vidstack's own caption track (Settings → it disables the player's native captions), or you can move our subtitles to the top (Settings → Position).
 - **One subtitle per visible cue.** ASS positioning / styling is partially supported; complex karaoke effects render plainly.
-- **Crunchyroll DOM changes.** Show / episode auto-detection uses the page's series-link DOM; if Crunchyroll reorganises the page, the script falls back to a manual search box in the panel.
+- **Auto-detection is best-effort.** The show name is guessed from the page title (`og:title` / `<h1>` / `<title>` / the player's `title` attribute), so on many sites you'll need to type the show + episode into the search box yourself.
+- **Provider must expose a `<video>` element.** HTML / HLS / DASH providers work; YouTube / Vimeo iframe providers don't expose a readable `<video>`, so time-sync won't work there.
 - **jimaku.cc rate limit:** 25 requests / minute per key. Plenty for normal use; if you hammer the search box you'll get throttled briefly.
 
 ## Development
 
 The userscript is a single self-contained file at `jimaku-player-reloaded.js`. No build step. Edit it, save, refresh.
 
-It runs twice per Crunchyroll page:
+It runs on every page (`@match *://*/*`) but does nothing until a Vidstack `<media-player>` is found. When one appears, it:
 
-- On `www.crunchyroll.com/watch/...` it mounts the UI inside the Bitmovin player container, polls the `<video>` element for current time, and talks to the jimaku.cc API via `GM_xmlhttpRequest`.
-- On `static.crunchyroll.com/...` (the legacy iframe path, kept for fallback) it relays video-time and seek messages via `postMessage`.
+- Mounts the UI (overlay, **字** button, panel) inside the `<media-player>` element.
+- Polls the underlying `<video>` element for the current time and to seek — this is the most reliable, sandbox-safe time source across providers.
+- Hides Vidstack's native captions (when enabled) by disabling the `<video>`'s text tracks and CSS-hiding the caption elements (`media-captions`, `[data-part="cue-display"]`).
+- Talks to the jimaku.cc API via `GM_xmlhttpRequest`.
 
-State is stored in `localStorage` (`jp:*` keys) so it works in userscript managers that don't expose `GM_setValue` (notably Userscripts.app on Safari).
+State is stored in `localStorage` (`jp:*` keys) so it works in userscript managers that don't expose `GM_setValue` (notably Userscripts.app on Safari). Per-show data (alignment, chosen entry) is keyed on `hostname + show title`.
 
 ## Credits
 

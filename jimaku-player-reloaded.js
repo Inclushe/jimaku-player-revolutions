@@ -1,11 +1,10 @@
 // ==UserScript==
 // @name         Jimaku Player Reloaded
 // @namespace    https://github.com/mgp25/jimaku-player-reloaded
-// @version      2.7.0
-// @description  Browse, download, and align Japanese subtitles directly inside the Crunchyroll player using jimaku.cc.
+// @version      3.0.0
+// @description  Browse, download, and align Japanese subtitles inside any Vidstack-based player using jimaku.cc.
 // @author       mgp25
-// @match        https://www.crunchyroll.com/*
-// @match        https://static.crunchyroll.com/*
+// @match        *://*/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM.xmlHttpRequest
 // @connect      jimaku.cc
@@ -19,52 +18,13 @@
 (function () {
 	'use strict';
 
-	const IS_IFRAME = location.hostname === 'static.crunchyroll.com';
-	const IS_MAIN = location.hostname === 'www.crunchyroll.com';
 	const TAG = '[jimaku]';
 	const log = (...a) => console.log(TAG, ...a);
 	const warn = (...a) => console.warn(TAG, ...a);
 
 	try { window.addEventListener('error', (e) => warn('uncaught', e.message)); } catch {}
 
-	log('boot', location.hostname, IS_IFRAME ? '(iframe)' : '(main)');
-
-	if (IS_IFRAME) {
-		let video = null;
-		let lastT = -1;
-		const findVideo = () => {
-			if (video && document.contains(video)) return video;
-			video = document.querySelector('video');
-			return video;
-		};
-		setInterval(() => {
-			const v = findVideo();
-			if (!v || typeof v.currentTime !== 'number') return;
-			const t = Math.floor(v.currentTime * 1000);
-			if (t !== lastT) {
-				lastT = t;
-				try {
-					window.parent.postMessage(
-						{ type: 'jp-time', time: t, paused: v.paused, duration: (v.duration || 0) * 1000 },
-						'*'
-					);
-				} catch {
-					/* ignore */
-				}
-			}
-		}, 50);
-		window.addEventListener('message', (e) => {
-			const d = e.data;
-			if (!d || typeof d !== 'object') return;
-			const v = findVideo();
-			if (!v) return;
-			if (d.type === 'jp-seek' && typeof d.time === 'number') v.currentTime = d.time / 1000;
-			if (d.type === 'jp-pause') v.pause();
-			if (d.type === 'jp-play') v.play().catch(() => {});
-		});
-		return;
-	}
-	if (!IS_MAIN) return;
+	log('boot', location.hostname);
 
 	const KEYS = {
 		apiKey: 'jimaku-api-key',
@@ -114,42 +74,21 @@
 		ui: { panelOpen: false, tab: 'browse', loading: '', error: '' },
 	};
 
-	window.addEventListener('message', (e) => {
-		if (!e.data || typeof e.data !== 'object') return;
-		if (e.data.type === 'jp-time') {
-			state.videoTimeMs = e.data.time;
-			if (!state.videoFound) {
-				state.videoFound = true;
-				log('video connected');
-				updateVideoStatus();
-			}
-		}
-	});
-
-	function postToPlayerIframe(message) {
-		document.querySelectorAll('iframe').forEach((f) => {
-			try {
-				f.contentWindow.postMessage(message, '*');
-			} catch {
-				/* ignore */
-			}
-		});
+	function findVidstackPlayer() {
+		return document.querySelector('media-player');
 	}
 	function getLocalVideo() {
-		return (
-			document.querySelector('.bitmovinplayer-container video') ||
-			document.querySelector('[class*="player"] video') ||
-			document.querySelector('video')
-		);
+		const player = findVidstackPlayer();
+		if (player) {
+			const v = player.querySelector('video');
+			if (v) return v;
+		}
+		return document.querySelector('media-provider video') || document.querySelector('video');
 	}
 	const seekTo = (timeMs) => {
 		const t = Math.max(0, timeMs);
 		const v = getLocalVideo();
-		if (v) {
-			v.currentTime = t / 1000;
-			return;
-		}
-		postToPlayerIframe({ type: 'jp-seek', time: t });
+		if (v) v.currentTime = t / 1000;
 	};
 
 	setInterval(() => {
@@ -163,46 +102,15 @@
 		}
 	}, 50);
 
-	function findBitmovinPlayer() {
-		const c = document.querySelector('.bitmovinplayer-container');
-		return c && c.player && typeof c.player === 'object' ? c.player : null;
-	}
-	function killBitmovinSubs(player) {
-		if (!player || !player.subtitles || typeof player.subtitles.list !== 'function') return;
-		try {
-			const tracks = player.subtitles.list() || [];
-			for (const t of tracks) {
-				if (!t || !t.id) continue;
-				try { player.subtitles.disable(t.id); } catch {}
-			}
-		} catch {}
-	}
-	function hookBitmovinEvents(player) {
-		if (!player || player._jpHooked || typeof player.on !== 'function') return;
-		player._jpHooked = true;
-		const names = ['subtitleadded', 'subtitleenable', 'subtitleenabled', 'subtitlechanged', 'subtitlechange', 'sourceloaded'];
-		for (const n of names) {
-			try {
-				player.on(n, () => {
-					if (state.hideNative) killBitmovinSubs(player);
-				});
-			} catch {}
-		}
-		log('hooked bitmovin subtitle events');
-	}
 	function applyHideNative() {
 		document.documentElement.classList.toggle('jp-hide-native', !!state.hideNative);
+		if (!state.hideNative) return;
 		const v = getLocalVideo();
-		if (state.hideNative && v && v.textTracks) {
+		if (v && v.textTracks) {
 			for (let i = 0; i < v.textTracks.length; i++) {
 				const t = v.textTracks[i];
 				if (t.mode !== 'disabled') t.mode = 'disabled';
 			}
-		}
-		const player = findBitmovinPlayer();
-		if (player) {
-			hookBitmovinEvents(player);
-			if (state.hideNative) killBitmovinSubs(player);
 		}
 	}
 	applyHideNative();
@@ -210,46 +118,41 @@
 
 	const clean = (s) => (s || '').replace(/\s+/g, ' ').trim();
 
+	const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+	// Best-effort show/episode detection from generic page metadata. There is no
+	// universal "what am I watching" signal across Vidstack sites, so this only
+	// pre-fills the manual search box — the user can always edit it.
 	function detectShow() {
-		const out = { showTitle: '', showSlug: '', episodeNumber: null, episodeTitle: '', mediaId: '' };
+		const out = { showTitle: '', showKey: '', episodeNumber: null };
 
-		const urlMatch = location.pathname.match(/\/watch\/([A-Z0-9]+)(?:\/([^/?#]+))?/i);
-		if (urlMatch) {
-			out.mediaId = urlMatch[1];
-			out.episodeTitle = urlMatch[2] ? urlMatch[2].replace(/-/g, ' ') : '';
-		}
-
-		const seriesLink = document.querySelector(
-			'a[href*="/series/"], a[href*="/de/series/"], a[href*="/es/series/"], a[href*="/fr/series/"], a[href*="/it/series/"], a[href*="/pt-br/series/"], a[href*="/ru/series/"], a[href*="/ar/series/"], a[href*="/hi/series/"]'
-		);
-		if (seriesLink) {
-			const m = seriesLink.getAttribute('href').match(/\/series\/([A-Z0-9]+)\/([^/?#]+)/i);
-			if (m) {
-				out.showSlug = m[2];
-				out.showTitle = clean(seriesLink.textContent) || m[2].replace(/-/g, ' ');
-			}
-		}
-		if (!out.showTitle) {
-			const og = document.querySelector('meta[property="og:title"]');
-			if (og && og.content) {
-				out.showTitle = clean(og.content)
-					.replace(/^Watch\s+/i, '')
-					.replace(/\s*-\s*Crunchyroll\s*$/i, '');
-			}
-		}
-
-		const sources = [
-			document.querySelector('h1')?.textContent,
+		const player = findVidstackPlayer();
+		const candidates = [
+			player?.getAttribute('title'),
 			document.querySelector('meta[property="og:title"]')?.content,
+			document.querySelector('h1')?.textContent,
 			document.title,
-		].filter(Boolean);
-		for (const s of sources) {
-			const m = s.match(/(?:Episode|Ep\.?|E)\s*(\d+)/i);
+		]
+			.filter(Boolean)
+			.map(clean);
+
+		for (const s of candidates) {
+			const m = s.match(/(?:Episode|Ep\.?|E|#)\s*(\d+)/i);
 			if (m) {
 				out.episodeNumber = parseInt(m[1], 10);
 				break;
 			}
 		}
+
+		// Take the first available title and strip a trailing site-brand suffix
+		// (e.g. "My Show - Vidstack") plus a leading "Watch ".
+		let raw = candidates[0] || '';
+		const brand = location.hostname.replace(/^www\./, '').split('.')[0] || '';
+		if (brand) {
+			raw = raw.replace(new RegExp('\\s*[\\-–—|:·]\\s*' + escapeRe(brand) + '.*$', 'i'), '');
+		}
+		out.showTitle = clean(raw.replace(/^watch\s+/i, ''));
+		out.showKey = (location.hostname + '|' + out.showTitle).toLowerCase();
 		return out;
 	}
 
@@ -257,12 +160,12 @@
 		const next = detectShow();
 		const changed =
 			!state.detected ||
-			state.detected.showSlug !== next.showSlug ||
+			state.detected.showKey !== next.showKey ||
 			state.detected.episodeNumber !== next.episodeNumber;
 		state.detected = next;
 		if (changed) {
-			if (next.showSlug && typeof state.alignByShow[next.showSlug] === 'number') {
-				state.alignment = state.alignByShow[next.showSlug];
+			if (next.showKey && typeof state.alignByShow[next.showKey] === 'number') {
+				state.alignment = state.alignByShow[next.showKey];
 			}
 			renderPanel();
 		}
@@ -419,12 +322,10 @@
 		return await gmReq({ url, auth: false });
 	}
 
+	// Only the Vidstack player element counts as a mount target, so the script
+	// stays completely idle on every other site (we run on *://*/*).
 	function findPlayerContainer() {
-		const iframe = document.querySelector('iframe[src*="static.crunchyroll.com"]');
-		if (iframe) return iframe.parentElement;
-		const v = document.querySelector('video');
-		if (v) return v.closest('[class*="player"], [class*="video"]') || v.parentElement;
-		return null;
+		return findVidstackPlayer();
 	}
 
 	const STYLES = `
@@ -537,13 +438,11 @@
 		background: #2a2d3a; border-radius: 3px; padding: 1px 5px;
 	}
 
-	/* Hide Crunchyroll/Bitmovin's native subtitle overlay when the user opts in */
-	html.jp-hide-native .bmpui-ui-subtitle-overlay,
-	html.jp-hide-native .bmpui-subtitle-region-container,
-	html.jp-hide-native .bmpui-subtitle-label,
-	html.jp-hide-native .bmpui-ui-subtitle-label,
-	html.jp-hide-native [class*="bmpui"][class*="subtitle"][class*="overlay"],
-	html.jp-hide-native [class*="bmpui"][class*="subtitle"][class*="region"] {
+	/* Hide Vidstack's native captions overlay when the user opts in */
+	html.jp-hide-native media-captions,
+	html.jp-hide-native .vds-captions,
+	html.jp-hide-native [data-part="cue-display"],
+	html.jp-hide-native [data-part="captions"] {
 		display: none !important;
 		opacity: 0 !important;
 		visibility: hidden !important;
@@ -600,7 +499,7 @@
 			panel = document.createElement('div');
 			panel.id = 'jp-panel';
 			// Don't let any click/mouse interaction inside the panel reach the
-			// Bitmovin player below (it pauses on click).
+			// player below (Vidstack toggles play/pause on click).
 			['click', 'mousedown', 'mouseup', 'dblclick'].forEach((evt) => {
 				panel.addEventListener(evt, (e) => e.stopPropagation());
 			});
@@ -874,8 +773,8 @@
 			panel.querySelector('#jp-change-show')?.addEventListener('click', () => {
 				state.selectedEntry = null;
 				state.files = [];
-				if (state.detected?.showSlug) {
-					delete state.entryCache[state.detected.showSlug];
+				if (state.detected?.showKey) {
+					delete state.entryCache[state.detected.showKey];
 					set(KEYS.entryCache, state.entryCache);
 				}
 				renderPanel();
@@ -947,7 +846,7 @@
 				setError(`No matches for "${query}".`);
 				return;
 			}
-			const cached = det.showSlug ? state.entryCache[det.showSlug] : null;
+			const cached = det.showKey ? state.entryCache[det.showKey] : null;
 			const cacheHit = cached ? state.entries.find((e) => e.id === cached) : null;
 			const exact =
 				!cacheHit &&
@@ -965,8 +864,8 @@
 		const entry = state.entries.find((x) => x.id === entryId);
 		if (!entry) return;
 		state.selectedEntry = entry;
-		if (state.detected?.showSlug) {
-			state.entryCache[state.detected.showSlug] = entry.id;
+		if (state.detected?.showKey) {
+			state.entryCache[state.detected.showKey] = entry.id;
 			set(KEYS.entryCache, state.entryCache);
 		}
 		const ep = state.ui.episodeDraft ?? state.detected?.episodeNumber;
@@ -1031,9 +930,9 @@
 		renderPanel();
 	}
 	function persistAlignment() {
-		const slug = state.detected?.showSlug;
-		if (slug) {
-			state.alignByShow[slug] = state.alignment;
+		const key = state.detected?.showKey;
+		if (key) {
+			state.alignByShow[key] = state.alignment;
 			set(KEYS.alignBy, state.alignByShow);
 		}
 	}
