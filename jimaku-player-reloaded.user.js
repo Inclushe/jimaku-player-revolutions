@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jimaku Player Reloaded
 // @namespace    https://github.com/mgp25/jimaku-player-reloaded
-// @version      3.2.4
+// @version      3.3.0
 // @description  Browse, download, and align Japanese subtitles inside any Vidstack-based player using jimaku.cc. Auto-finds the right file for the current episode.
 // @author       mgp25
 // @match        *://*/*
@@ -36,6 +36,10 @@
 		position: 'jimaku-position',
 		hideNative: 'jimaku-hide-native-subs',
 		autoSub: 'jimaku-auto-sub',
+		excludeChinese: 'jimaku-exclude-chinese',
+		stickGroup: 'jimaku-stick-group',
+		groupByShow: 'jimaku-group-by-show',
+		customCss: 'jimaku-custom-css',
 	};
 	const get = (k, d) => {
 		try {
@@ -69,8 +73,12 @@
 		position: get(KEYS.position, 'bottom'),
 		hideNative: get(KEYS.hideNative, true),
 		autoSub: get(KEYS.autoSub, true),
+		excludeChinese: get(KEYS.excludeChinese, true),
+		stickGroup: get(KEYS.stickGroup, true),
+		customCss: get(KEYS.customCss, ''),
 		entryCache: get(KEYS.entryCache, {}),
 		alignByShow: get(KEYS.alignBy, {}),
+		groupByShow: get(KEYS.groupByShow, {}),
 		entries: [],
 		selectedEntry: null,
 		files: [],
@@ -382,11 +390,48 @@
 	}
 
 	const SUB_EXT = /\.(srt|vtt|ass|ssa)$/i;
+
+	// Chinese-subtitle markers in release filenames, e.g. [CHS], [CHT],
+	// [CHS,JPN], [JPN,CHS], [CHS&JPN]. Bounded by non-letters so we don't match
+	// inside unrelated words. CHS = simplified, CHT = traditional.
+	const CHINESE_RE = /(?:^|[^a-z])(?:chs|cht)(?:[^a-z]|$)/i;
+	const isChineseSub = (name) => CHINESE_RE.test(name);
+	// Drop Chinese-sub files up front (when enabled) so they're excluded from
+	// both the browse list and every auto-selection step (incl. group matching).
+	const dropChinese = (files) => (state.excludeChinese ? (files || []).filter((f) => !isChineseSub(f.name)) : files || []);
+
+	const normGroup = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+	// Bracketed tokens that are clearly NOT a release group (hashes, resolutions,
+	// language tags) so we don't mistake them for one.
+	const looksLikeNonGroup = (s) => {
+		const t = (s || '').trim();
+		return (
+			/^[0-9a-f]{8}$/i.test(t) || // CRC32 checksum
+			/^\d{3,4}p?$/i.test(t) || // 1080 / 1080p
+			/\d{3,4}x\d{3,4}/.test(t) || // 1280x720
+			/^(?:chs|cht|jpn|eng|jp|en|sc|tc|gb|big5)(?:[,&+]\s*(?:chs|cht|jpn|eng))*$/i.test(t) // language tags
+		);
+	};
+	// The fansub release group, conventionally the first bracketed token (or a
+	// trailing one). anitomy@0.0.35 has its release-group pass stubbed out, so we
+	// extract it ourselves and only fall back to anitomy.
+	const fileGroup = (name) => {
+		const base = String(name || '').replace(/\.[a-z0-9]{1,4}$/i, '');
+		let m = base.match(/^[\s_.]*[[(]([^\])]{1,40})[)\]]/);
+		if (m && !looksLikeNonGroup(m[1])) return m[1].trim();
+		m = base.match(/[[(]([^\])]{1,40})[)\]][\s_.]*$/);
+		if (m && !looksLikeNonGroup(m[1])) return m[1].trim();
+		const info = safeParse(name);
+		return (info && info.release && info.release.group) || '';
+	};
+	const stickyGroupFor = (showKey) => (state.stickGroup && showKey ? state.groupByShow[showKey] || '' : '');
+
 	// Rank candidate files for a given episode, using anitomy to read the
 	// episode number / release info out of each filename.
 	function pickBestFile(files, episode) {
-		const usable = (files || []).filter((f) => SUB_EXT.test(f.name));
+		const usable = dropChinese((files || []).filter((f) => SUB_EXT.test(f.name)));
 		if (!usable.length) return null;
+		const stickyNorm = normGroup(stickyGroupFor(state.detected && state.detected.showKey));
 		const scored = usable.map((f) => {
 			const info = safeParse(f.name);
 			const epNum = info && info.episode && info.episode.number != null ? Number(info.episode.number) : null;
@@ -396,6 +441,11 @@
 				else if (epNum != null) score -= 100; // names a different, single episode
 				// epNum == null → batch / unnamed: leave neutral, could still contain it
 			}
+			// Prefer the release group already chosen for this show (sticky). If a
+			// candidate has no parseable release group, just ignore it here — it's
+			// neither rewarded nor penalised, so it can still win on other merits.
+			const fg = normGroup(fileGroup(f.name));
+			if (stickyNorm && fg && fg === stickyNorm) score += 50;
 			if (state.preferAss && /\.(ass|ssa)$/i.test(f.name)) score += 10;
 			const res = (info && info.video && info.video.resolution) || '';
 			if (/1080/.test(res)) score += 3;
@@ -569,9 +619,13 @@
 	#jp-panel .tab-body { padding: 12px; overflow: auto; flex: 1; }
 	#jp-panel .row { display: flex; gap: 6px; align-items: center; }
 	#jp-panel .row + .row, #jp-panel .stack > * + * { margin-top: 8px; }
-	#jp-panel input[type=text], #jp-panel input[type=password], #jp-panel input[type=number] {
+	#jp-panel input[type=text], #jp-panel input[type=password], #jp-panel input[type=number], #jp-panel textarea {
 		flex: 1; min-width: 0; padding: 6px 8px; border-radius: 5px; border: 1px solid #333a50;
 		background: #11141d; color: #fff; font: inherit;
+	}
+	#jp-panel textarea {
+		width: 100%; box-sizing: border-box; resize: vertical;
+		font-family: ui-monospace, SFMono-Regular, monospace; font-size: 12px;
 	}
 	#jp-panel input[type=number] { flex: 0 0 56px; }
 	#jp-panel button.btn { white-space: nowrap; flex-shrink: 0; }
@@ -634,8 +688,23 @@
 		document.head.appendChild(s);
 	}
 
+	// User-supplied CSS, injected into its own <style> so it can target our
+	// overlay/panel or the host page's player. Re-applied whenever it changes.
+	function applyCustomCss() {
+		const head = document.head || document.documentElement;
+		if (!head) return;
+		let el = document.getElementById('jp-custom-css');
+		if (!el) {
+			el = document.createElement('style');
+			el.id = 'jp-custom-css';
+			head.appendChild(el);
+		}
+		if (el.textContent !== state.customCss) el.textContent = state.customCss || '';
+	}
+
 	function ensureMounted() {
 		ensureStyles();
+		applyCustomCss();
 		const container = findPlayerContainer();
 		if (!container) return false;
 		if (!host) info('container found, mounting into', container.tagName.toLowerCase(), 'position=' + getComputedStyle(container).position);
@@ -777,6 +846,13 @@
 				}</p>`
 			: `<p class="muted">No show detected from page — type one below.</p>`;
 
+		const savedGroup = det.showKey ? state.groupByShow[det.showKey] : '';
+		const groupLine = savedGroup
+			? `<p class="muted">Release group: <strong>${escapeHtml(savedGroup)}</strong>${
+					state.stickGroup ? ' <span class="pill">sticky</span>' : ''
+				}</p>`
+			: '';
+
 		const queryDefault = state.ui.queryDraft ?? det.showTitle ?? '';
 		const epDefault = state.ui.episodeDraft ?? (det.episodeNumber ?? '');
 
@@ -805,7 +881,7 @@
 
 		let files = '';
 		if (state.selectedEntry) {
-			const sortedFiles = sortFiles(state.files, state.preferAss);
+			const sortedFiles = sortFiles(dropChinese(state.files), state.preferAss);
 			files = `
 				<div class="row" style="margin-top:8px;">
 					<strong style="flex:1">${escapeHtml(state.selectedEntry.name)}</strong>
@@ -832,6 +908,7 @@
 		return `
 			<div class="stack">
 				${detLine}
+				${groupLine}
 				${search}
 				${state.ui.loading ? `<p class="muted">${escapeHtml(state.ui.loading)}…</p>` : ''}
 				${state.ui.error ? `<p class="err">${escapeHtml(state.ui.error)}</p>` : ''}
@@ -917,6 +994,10 @@
 				<label class="row" style="margin-top:8px"><input type="checkbox" id="jp-auto-sub" ${state.autoSub ? 'checked' : ''}> Automatically find &amp; load subtitles for the current episode</label>
 				<p class="muted">Searches jimaku.cc on load and picks the best file using filename parsing. Needs an API key and a detectable episode number.</p>
 
+				<label class="row" style="margin-top:8px"><input type="checkbox" id="jp-exclude-chinese" ${state.excludeChinese ? 'checked' : ''}> Exclude Chinese subtitle files (CHS / CHT)</label>
+
+				<label class="row" style="margin-top:8px"><input type="checkbox" id="jp-stick-group" ${state.stickGroup ? 'checked' : ''}> Stick to the same release group across episodes</label>
+
 				<label class="row" style="margin-top:8px"><input type="checkbox" id="jp-prefer-ass" ${state.preferAss ? 'checked' : ''}> Prefer ASS files when available</label>
 
 				<label>Subtitle font scale (${Math.round(state.fontScale * 100)}%)</label>
@@ -926,6 +1007,13 @@
 				<div class="row">
 					<button class="btn" data-pos="bottom" ${state.position === 'bottom' ? 'style="background:#e83450"' : ''}>Bottom</button>
 					<button class="btn" data-pos="top" ${state.position === 'top' ? 'style="background:#e83450"' : ''}>Top</button>
+				</div>
+
+				<label style="margin-top:8px">Custom CSS</label>
+				<textarea id="jp-custom-css" rows="5" spellcheck="false" placeholder="/* Injected into the page. Style #jp-overlay, #jp-panel, the player, etc. */">${escapeHtml(state.ui.cssDraft ?? state.customCss)}</textarea>
+				<div class="row">
+					<button class="btn primary" id="jp-save-css">Apply CSS</button>
+					<span class="muted" style="flex:1">Applied live and saved locally.</span>
 				</div>
 
 				<p class="muted">Hotkeys: <kbd>S</kbd> sync · <kbd>B</kbd> rewind to last sub · <kbd>J</kbd> open panel · <kbd>H</kbd> hide subs · <kbd>I</kbd> flip position · <kbd>Z</kbd>/<kbd>X</kbd> nudge ±0.2s (Shift = ±1s).</p>
@@ -988,10 +1076,29 @@
 				}
 				renderPanel();
 			});
+			panel.querySelector('#jp-exclude-chinese')?.addEventListener('change', (ev) => {
+				state.excludeChinese = ev.target.checked;
+				set(KEYS.excludeChinese, state.excludeChinese);
+				renderPanel();
+			});
+			panel.querySelector('#jp-stick-group')?.addEventListener('change', (ev) => {
+				state.stickGroup = ev.target.checked;
+				set(KEYS.stickGroup, state.stickGroup);
+				renderPanel();
+			});
 			panel.querySelector('#jp-prefer-ass')?.addEventListener('change', (ev) => {
 				state.preferAss = ev.target.checked;
 				set(KEYS.preferAss, state.preferAss);
 				renderPanel();
+			});
+			const cssBox = panel.querySelector('#jp-custom-css');
+			cssBox?.addEventListener('input', () => (state.ui.cssDraft = cssBox.value));
+			panel.querySelector('#jp-save-css')?.addEventListener('click', () => {
+				state.customCss = (state.ui.cssDraft ?? cssBox?.value ?? '').trim();
+				state.ui.cssDraft = undefined;
+				set(KEYS.customCss, state.customCss);
+				applyCustomCss();
+				toast('Custom CSS applied');
 			});
 			panel.querySelector('#jp-scale')?.addEventListener('input', (ev) => {
 				state.fontScale = parseFloat(ev.target.value);
@@ -1067,7 +1174,8 @@
 		}
 	}
 	async function loadFileFromList(idx) {
-		const sorted = sortFiles(state.files, state.preferAss);
+		// Must mirror the list rendered in renderBrowseTab so indices line up.
+		const sorted = sortFiles(dropChinese(state.files), state.preferAss);
 		const f = sorted[idx];
 		if (!f) return;
 		const ext = (f.name.split('.').pop() || '').toLowerCase();
@@ -1106,6 +1214,17 @@
 		state.currentSubIndex = -1;
 		// Mark this show+episode as handled so auto-load won't override a choice.
 		autoState.key = autoKey(state.detected);
+		// Remember this file's release group for the show, so other episodes can
+		// stick to the same group when auto-selecting. Manual picks update it too.
+		const key = state.detected?.showKey;
+		if (key) {
+			const g = fileGroup(filename);
+			if (g && state.groupByShow[key] !== g) {
+				state.groupByShow[key] = g;
+				set(KEYS.groupByShow, state.groupByShow);
+				info('release group for show set to', JSON.stringify(g));
+			}
+		}
 		updateVideoStatus();
 		renderPanel();
 	}
