@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jimaku Player Reloaded
 // @namespace    https://github.com/mgp25/jimaku-player-reloaded
-// @version      3.2.3
+// @version      3.2.4
 // @description  Browse, download, and align Japanese subtitles inside any Vidstack-based player using jimaku.cc. Auto-finds the right file for the current episode.
 // @author       mgp25
 // @match        *://*/*
@@ -144,16 +144,14 @@
 	// Best-effort show/episode detection from generic page metadata. There is no
 	// universal "what am I watching" signal across Vidstack sites, so this only
 	// pre-fills the manual search box — the user can always edit it.
+	// We deliberately avoid og:title and document.title: on many sites those are
+	// the generic site name ("Watch Anime Online - SomeSite"), not the show. The
+	// player's own title and the page <h1> track the actual content far better.
 	function detectShow() {
 		const out = { showTitle: '', showKey: '', episodeNumber: null };
 
 		const player = findVidstackPlayer();
-		const candidates = [
-			player?.getAttribute('title'),
-			document.querySelector('meta[property="og:title"]')?.content,
-			document.querySelector('h1')?.textContent,
-			document.title,
-		]
+		const candidates = [player?.getAttribute('title'), document.querySelector('h1')?.textContent]
 			.filter(Boolean)
 			.map(clean);
 
