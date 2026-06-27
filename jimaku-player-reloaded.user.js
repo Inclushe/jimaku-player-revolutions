@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jimaku Player Reloaded
 // @namespace    https://github.com/mgp25/jimaku-player-reloaded
-// @version      3.2.2
+// @version      3.2.3
 // @description  Browse, download, and align Japanese subtitles inside any Vidstack-based player using jimaku.cc. Auto-finds the right file for the current episode.
 // @author       mgp25
 // @match        *://*/*
@@ -128,6 +128,19 @@
 
 	const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+	// The candidate sources we read the show title from, in priority order.
+	// Logged on change (see refreshDetection) so it's clear which one is winning.
+	function titleSources() {
+		const player = findVidstackPlayer();
+		return {
+			'player[title]': clean(player?.getAttribute('title') || ''),
+			'player[aria-label]': clean(player?.getAttribute('aria-label') || ''),
+			'og:title': clean(document.querySelector('meta[property="og:title"]')?.content || ''),
+			h1: clean(document.querySelector('h1')?.textContent || ''),
+			'document.title': clean(document.title || ''),
+		};
+	}
+
 	// Best-effort show/episode detection from generic page metadata. There is no
 	// universal "what am I watching" signal across Vidstack sites, so this only
 	// pre-fills the manual search box — the user can always edit it.
@@ -179,8 +192,9 @@
 		const next = detectShow();
 		const changed =
 			!prev || prev.showKey !== next.showKey || prev.episodeNumber !== next.episodeNumber;
-		if (changed && next.showTitle && (!prev || prev.showTitle !== next.showTitle || prev.episodeNumber !== next.episodeNumber)) {
+		if (changed && (!prev || prev.showTitle !== next.showTitle || prev.episodeNumber !== next.episodeNumber)) {
 			info('show grabbed:', JSON.stringify(next.showTitle), '· episode:', next.episodeNumber ?? '(none)');
+			info('title sources:', titleSources());
 		}
 		// Genuine episode change (both sides a real number, and different): drop the
 		// now-stale subtitles so they don't show over the new episode. Guarded
