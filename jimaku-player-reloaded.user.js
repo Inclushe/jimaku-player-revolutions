@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jimaku Player Reloaded
 // @namespace    https://github.com/mgp25/jimaku-player-reloaded
-// @version      3.4.1
+// @version      3.5.0
 // @description  Browse, download, and align Japanese subtitles inside any Vidstack-based player using jimaku.cc. Auto-finds the right file for the current episode.
 // @author       mgp25
 // @match        *://*/*
@@ -567,7 +567,7 @@
 	}
 
 	#jp-fab {
-		position: absolute; right: 12px; top: 12px; z-index: 60;
+		position: absolute; right: 12px; top: 50%; transform: translateY(-50%); z-index: 60;
 		width: 38px; height: 38px; border-radius: 8px;
 		background: rgba(20,20,30,.78); color: #fff;
 		display: flex; align-items: center; justify-content: center;
@@ -577,7 +577,9 @@
 		user-select: none; pointer-events: auto;
 		font-family: "Yu Gothic", "Noto Sans JP", sans-serif;
 	}
-	#jp-host:hover #jp-fab, #jp-fab:focus-visible, #jp-fab.has-active { opacity: 1; }
+	#jp-host:hover #jp-fab, #jp-fab:focus-visible, #jp-fab.has-active, #jp-fab.reveal { opacity: 1; }
+	/* Vidstack sets data-controls on the player whenever its controls are visible */
+	[data-controls] #jp-fab { opacity: 1; }
 	#jp-fab:hover { background: #e83450; }
 	#jp-fab.has-subs::after {
 		content: ''; position: absolute; right: 4px; bottom: 4px;
@@ -591,9 +593,11 @@
 	}
 
 	#jp-panel {
-		position: absolute; right: 12px; top: 58px; z-index: 70;
-		width: 340px; max-width: calc(100% - 24px);
-		max-height: min(70vh, 600px);
+		/* Lives on <body> (position: fixed) so the player's bounds/overflow can't
+		   clip it — important on mobile where the player is small. */
+		position: fixed; right: 12px; top: 12px; z-index: 2147483646;
+		width: 340px; max-width: calc(100vw - 24px);
+		max-height: min(85vh, 600px);
 		background: rgba(18,18,26,.97); color: #fff;
 		border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,.5);
 		border: 1px solid rgba(255,255,255,.1);
@@ -679,6 +683,7 @@
 	var fab = null;
 	var panel = null;
 	var overlay = null;
+	var revealedOnce = false;
 
 	function ensureStyles() {
 		if (document.getElementById('jp-styles')) return;
@@ -736,6 +741,9 @@
 			fab.addEventListener('mousedown', (e) => e.stopPropagation());
 			host.appendChild(fab);
 
+			// The panel lives on <body>, not inside the player, so the player's
+			// bounds/overflow can't clip it on small (mobile) screens.
+			document.getElementById('jp-panel')?.remove();
 			panel = document.createElement('div');
 			panel.id = 'jp-panel';
 			// Don't let any click/mouse interaction inside the panel reach the
@@ -743,7 +751,7 @@
 			['click', 'mousedown', 'mouseup', 'dblclick'].forEach((evt) => {
 				panel.addEventListener(evt, (e) => e.stopPropagation());
 			});
-			host.appendChild(panel);
+			document.body.appendChild(panel);
 
 			const subTextEl = overlay.querySelector('#jp-overlay-text');
 			subTextEl.addEventListener('mousedown', (e) => e.stopPropagation());
@@ -756,6 +764,14 @@
 			document.documentElement.style.setProperty('--jp-scale', String(state.fontScale));
 			renderPanel();
 			info('mounted on player container', container.tagName.toLowerCase());
+
+			// On the first successful mount, flash the 字 button for 5s so the user
+			// knows it's there, then let it fall back to hover/controls visibility.
+			if (!revealedOnce) {
+				revealedOnce = true;
+				fab.classList.add('reveal');
+				setTimeout(() => fab && fab.classList.remove('reveal'), 5000);
+			}
 		}
 		return true;
 	}
