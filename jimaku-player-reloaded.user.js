@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jimaku Player Reloaded
 // @namespace    https://github.com/mgp25/jimaku-player-reloaded
-// @version      3.4.0
+// @version      3.4.1
 // @description  Browse, download, and align Japanese subtitles inside any Vidstack-based player using jimaku.cc. Auto-finds the right file for the current episode.
 // @author       mgp25
 // @match        *://*/*
@@ -561,7 +561,7 @@
 		max-width: 92%; padding: 6px 14px;
 		font-size: calc(2.4vw * var(--jp-scale, 1));
 		line-height: 1.45; color: #fff; white-space: pre-wrap; text-align: center;
-		text-shadow: -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 0 10px rgba(0,0,0,.85);
+		-webkit-text-stroke: 2px #000; text-stroke: 2px #000; paint-order: stroke fill;
 		background: rgba(0,0,0,.35); border-radius: 4px;
 		pointer-events: auto; cursor: pointer;
 	}
