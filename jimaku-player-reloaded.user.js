@@ -558,7 +558,7 @@
 
 	const STYLES = `
 	#jp-overlay {
-		container: normal; position: absolute; left: 0; right: 0; pointer-events: none;
+		container: normal / inline-size; position: absolute; left: 0; right: 0; pointer-events: none;
 		font-family: var(--jp-font, "Yu Gothic", "Meiryo", "Noto Sans JP", "Hiragino Sans", sans-serif);
 		z-index: 5; text-align: center;
 	}
