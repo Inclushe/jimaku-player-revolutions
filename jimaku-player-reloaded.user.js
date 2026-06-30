@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jimaku Player Reloaded
 // @namespace    https://github.com/Inclushe/Jimaku-Player-Reloaded
-// @version      3.7.2
+// @version      3.7.3
 // @description  Browse, download, and align Japanese subtitles inside any Vidstack-based player using jimaku.cc. Auto-finds the right file for the current episode.
 // @author       Inclushe (forked from repo by mgp25)
 // @match        *://*/*
