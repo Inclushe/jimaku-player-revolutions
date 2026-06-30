@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jimaku Player Reloaded
 // @namespace    https://github.com/Inclushe/Jimaku-Player-Reloaded
-// @version      3.8.0
+// @version      3.8.1
 // @description  Browse, download, and align Japanese subtitles inside any Vidstack-based player using jimaku.cc. Auto-finds the right file for the current episode.
 // @author       Inclushe (forked from repo by mgp25)
 // @match        *://*/*
@@ -1246,6 +1246,7 @@
 				state.alignment = 0;
 				persistAlignment();
 				renderPanel();
+				toast(alignmentText());
 			});
 			panel.querySelector('#jp-rewind')?.addEventListener('click', rewindToLastSub);
 			panel.querySelector('#jp-anchor-first')?.addEventListener('click', anchorFirstSub);
@@ -1464,10 +1465,16 @@
 		renderPanel();
 	}
 
+	function alignmentText() {
+		if (state.alignment === 0) return 'Subtitle delay: 0s (synced)';
+		const s = (state.alignment / 1000).toFixed(2);
+		return `Subtitle delay: ${state.alignment > 0 ? '+' : ''}${s}s`;
+	}
 	function adjustAlignment(deltaMs) {
 		state.alignment += deltaMs;
 		persistAlignment();
 		renderPanel();
+		toast(alignmentText());
 	}
 	function persistAlignment() {
 		const key = state.detected?.showKey;
@@ -1633,8 +1640,26 @@
 		if (!toastEl) {
 			toastEl = document.createElement('div');
 			toastEl.style.cssText =
-				'position:fixed;left:50%;top:24px;transform:translateX(-50%);background:#222;color:#fff;padding:8px 14px;border-radius:6px;font:13px sans-serif;z-index:2147483647;opacity:0;transition:opacity .2s;pointer-events:none;';
-			document.body.appendChild(toastEl);
+				'background:#222;color:#fff;padding:8px 14px;border-radius:6px;font:13px sans-serif;z-index:2147483647;opacity:0;transition:opacity .2s;pointer-events:none;max-width:80%;';
+		}
+		// Show in the top-left of the player when mounted; fall back to the top
+		// of the page (centered) before the player exists.
+		const parent = host || document.body;
+		if (toastEl.parentElement !== parent) {
+			parent.appendChild(toastEl);
+			if (parent === host) {
+				toastEl.style.position = 'absolute';
+				toastEl.style.left = '12px';
+				toastEl.style.top = '12px';
+				toastEl.style.right = 'auto';
+				toastEl.style.transform = 'none';
+			} else {
+				toastEl.style.position = 'fixed';
+				toastEl.style.left = '50%';
+				toastEl.style.top = '24px';
+				toastEl.style.right = 'auto';
+				toastEl.style.transform = 'translateX(-50%)';
+			}
 		}
 		toastEl.textContent = msg;
 		toastEl.style.opacity = '1';
