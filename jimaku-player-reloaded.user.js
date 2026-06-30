@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jimaku Player Reloaded
 // @namespace    https://github.com/mgp25/jimaku-player-reloaded
-// @version      3.6.0
+// @version      3.6.1
 // @description  Browse, download, and align Japanese subtitles inside any Vidstack-based player using jimaku.cc. Auto-finds the right file for the current episode.
 // @author       mgp25
 // @match        *://*/*
@@ -908,7 +908,7 @@
 			return `
 				<div class="stack">
 					<p>Add your jimaku.cc API key in <strong>Settings</strong> to browse and download subtitles.</p>
-					<p class="muted">Get one at <a target="_blank" rel="noopener noreferrer" href="https://jimaku.cc/profile">jimaku.cc/profile</a>.</p>
+					<p class="muted">Get one at <a target="_blank" rel="noopener noreferrer" href="https://jimaku.cc/account">jimaku.cc/account</a>.</p>
 				</div>`;
 		}
 		const detLine = det.showTitle
@@ -1060,7 +1060,7 @@
 					<input id="jp-apikey" type="password" autocomplete="off" placeholder="Paste your API key" value="${escapeAttr(state.apiKey)}">
 					<button class="btn primary" id="jp-save-key">Save</button>
 				</div>
-				<p class="muted">Get one at <a target="_blank" rel="noopener noreferrer" href="https://jimaku.cc/profile">jimaku.cc/profile</a>. Stored locally only.</p>
+				<p class="muted">Get one at <a target="_blank" rel="noopener noreferrer" href="https://jimaku.cc/account">jimaku.cc/account</a>. Stored locally only.</p>
 
 				<label class="row" style="margin-top:8px"><input type="checkbox" id="jp-auto-sub" ${state.autoSub ? 'checked' : ''}> Automatically find &amp; load subtitles for the current episode</label>
 				<p class="muted">Searches jimaku.cc on load and picks the best file using filename parsing. Needs an API key and a detectable episode number.</p>

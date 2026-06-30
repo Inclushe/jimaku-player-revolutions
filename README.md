@@ -37,7 +37,7 @@ The script runs on every site (`@match *://*/*`) but stays completely idle until
 ## Setup (one time)
 
 1. Open <https://jimaku.cc> and create an account.
-2. Go to <https://jimaku.cc/profile> and copy your API key.
+2. Go to <https://jimaku.cc/account> and copy your API key.
 3. On any page with a Vidstack player, hover the player → click the small **字** button at the top-right → **Settings** tab → paste the key → **Save**.
 
 Stored locally only. Never sent anywhere except jimaku.cc itself.
