@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jimaku Player Revolutions
 // @namespace    https://github.com/Inclushe/jimaku-player-revolutions
-// @version      3.8.3
+// @version      3.8.4
 // @description  Browse, download, and align Japanese subtitles inside any Vidstack-based player using jimaku.cc. Auto-finds the right file for the current episode.
 // @author       Inclushe (forked from repo by mgp25)
 // @match        *://*/*
@@ -873,6 +873,9 @@
 
 			applyStyleVars();
 			renderPanel();
+			// Attach the hotkey listener only now that a player is mounted, so it
+			// never fires on pages without a Vidstack player.
+			wireHotkeys();
 			info('mounted on player container', container.tagName.toLowerCase());
 
 			// On the first successful mount, flash the 字 button for 5s so the user
@@ -1669,14 +1672,24 @@
 
 	// Registered in the capture phase so we can stop Jimaku's own hotkeys from
 	// reaching the player's keyboard handler (Vidstack binds many single letters).
-	document.addEventListener('keydown', (e) => {
+	// Only attached once we've mounted onto a player (see ensureMounted), so it
+	// never fires on pages without a Vidstack player.
+	let hotkeysWired = false;
+	function wireHotkeys() {
+		if (hotkeysWired) return;
+		hotkeysWired = true;
+		document.addEventListener('keydown', onHotkey, true);
+	}
+	function onHotkey(e) {
 		if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 		if (e.metaKey || e.ctrlKey || e.altKey) return;
+		// Bail if there's no player on the page right now (e.g. SPA navigated away).
+		if (!findVidstackPlayer()) return;
 		const k = e.key.toLowerCase();
 		if (!'jshibzx'.includes(k)) return;
 		info('key', k, 'player=' + document.querySelectorAll(PLAYER_SEL).length, 'mounted=' + !!host);
 		// Swallow the key before it bubbles to the player, unless disabled.
-		if (state.consumeKeys && findVidstackPlayer()) {
+		if (state.consumeKeys) {
 			e.preventDefault();
 			e.stopImmediatePropagation();
 		}
@@ -1703,7 +1716,7 @@
 		} else if (k === 'Backspace') {
 			adjustAlignment(0);
 		}
-	}, true);
+	}
 
 	// Single watcher driving everything. Vidstack often mounts late, and SPA
 	// sites swap the player / change the URL between episodes without a reload —
