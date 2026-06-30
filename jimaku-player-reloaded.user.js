@@ -560,7 +560,7 @@
 	#jp-overlay {
 		position: absolute; left: 0; right: 0; pointer-events: none;
 		font-family: var(--jp-font, "Yu Gothic", "Meiryo", "Noto Sans JP", "Hiragino Sans", sans-serif);
-		z-index: 50; text-align: center;
+		z-index: 5; text-align: center;
 	}
 	#jp-overlay.bottom { bottom: 8%; }
 	#jp-overlay.top { top: 5%; }
