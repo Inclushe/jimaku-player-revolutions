@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jimaku Player Reloaded
 // @namespace    https://github.com/mgp25/jimaku-player-reloaded
-// @version      3.7.1
+// @version      3.7.2
 // @description  Browse, download, and align Japanese subtitles inside any Vidstack-based player using jimaku.cc. Auto-finds the right file for the current episode.
 // @author       mgp25
 // @match        *://*/*
@@ -558,7 +558,7 @@
 
 	const STYLES = `
 	#jp-overlay {
-		position: absolute; left: 0; right: 0; pointer-events: none;
+		container: normal; position: absolute; left: 0; right: 0; pointer-events: none;
 		font-family: var(--jp-font, "Yu Gothic", "Meiryo", "Noto Sans JP", "Hiragino Sans", sans-serif);
 		z-index: 5; text-align: center;
 	}
@@ -567,12 +567,12 @@
 	#jp-overlay-text {
 		display: none;
 		max-width: 92%; padding: 6px 14px;
-		font-size: calc(2.4vw * var(--jp-scale, 1));
+		font-size: calc(2.4cqw * var(--jp-scale, 1));
 		font-weight: var(--jp-weight, 400);
 		line-height: 1.45; color: #fff; white-space: pre-wrap; text-align: center;
 		/* Outline width scales with the font so it stays proportional. */
-		-webkit-text-stroke: calc(var(--jp-outline, 2px) * var(--jp-scale, 1)) #000;
-		text-stroke: calc(var(--jp-outline, 2px) * var(--jp-scale, 1)) #000;
+		-webkit-text-stroke: calc(0.2cqw * var(--jp-outline, 2) * var(--jp-scale, 1)) #000;
+		text-stroke: calc(0.2cqw * var(--jp-outline, 2) * var(--jp-scale, 1)) #000;
 		paint-order: stroke fill;
 		background: rgba(0, 0, 0, var(--jp-bg-opacity, .35)); border-radius: 4px;
 		pointer-events: auto; cursor: pointer;
@@ -754,7 +754,7 @@
 	function applyStyleVars() {
 		const root = document.documentElement.style;
 		root.setProperty('--jp-scale', String(state.fontScale));
-		root.setProperty('--jp-outline', state.outline + 'px');
+		root.setProperty('--jp-outline', state.outline);
 		root.setProperty('--jp-bg-opacity', String(state.bgOpacity));
 		root.setProperty('--jp-weight', String(state.fontWeight));
 		if (state.fontFamily) root.setProperty('--jp-font', state.fontFamily);
@@ -1131,7 +1131,7 @@
 				<label id="jp-scale-label">Font size (${Math.round(state.fontScale * 100)}%)</label>
 				<input id="jp-scale" type="range" min="0.6" max="2.5" step="0.1" value="${state.fontScale}">
 
-				<label id="jp-outline-label">Outline size (${state.outline.toFixed(1)}px · scales with font)</label>
+				<label id="jp-outline-label">Outline size (${state.outline.toFixed(1)} · scales with font)</label>
 				<input id="jp-outline" type="range" min="0" max="6" step="0.5" value="${state.outline}">
 
 				<label id="jp-bg-opacity-label">Background opacity (${Math.round(state.bgOpacity * 100)}%)</label>
@@ -1260,7 +1260,7 @@
 				applyStyleVars();
 				set(KEYS.outline, state.outline);
 				const lbl = panel.querySelector('#jp-outline-label');
-				if (lbl) lbl.textContent = `Outline size (${state.outline.toFixed(1)}px · scales with font)`;
+				if (lbl) lbl.textContent = `Outline size (${state.outline.toFixed(1)} · scales with font)`;
 			});
 			panel.querySelector('#jp-bg-opacity')?.addEventListener('input', (ev) => {
 				state.bgOpacity = parseFloat(ev.target.value);
