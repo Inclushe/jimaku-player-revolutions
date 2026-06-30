@@ -109,7 +109,9 @@ It runs on every page (`@match *://*/*`) but does nothing until a supported play
 - Shows the **字** button alongside the player's own controls (each adapter's controls selector, e.g. Vidstack's `[data-controls]` or Plyr's `:not(.plyr--hide-controls)`).
 - Talks to the jimaku.cc API via `GM_xmlhttpRequest`.
 
-State is stored in `localStorage` (`jp:*` keys) so it works in userscript managers that don't expose `GM_setValue` (notably Userscripts.app on Safari). Per-show data (alignment, chosen entry) is keyed on `hostname + show title`.
+State is stored with the manager's shared storage (`GM_setValue`/`GM_getValue`, `jp:*` keys) so the API key and settings carry across **every** site; where GM storage isn't available (e.g. Userscripts on Safari) it falls back to per-site `localStorage`, and any existing `localStorage` values are migrated up on first read. Per-show data (alignment, chosen entry) is keyed on `hostname + show title`.
+
+The panel renders inside a **shadow root** (a `<body>`-level host with `:host { all: initial }`), so page stylesheets can't reach in and clash with it; user custom CSS is mirrored into the shadow so rules targeting `#jp-panel` still apply. Hotkeys are captured on `window` (capture phase) and the matching keydown/keyup/keypress are swallowed in the player's frame so players like JW Player can't act on the same key.
 
 ### Debugging
 

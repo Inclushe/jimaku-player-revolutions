@@ -1,12 +1,16 @@
 // ==UserScript==
 // @name         Jimaku Player Revolutions
 // @namespace    https://github.com/Inclushe/jimaku-player-revolutions
-// @version      4.1.0
+// @version      4.2.0
 // @description  Browse, download, and align Japanese subtitles inside any Vidstack, Video.js, Plyr, or JW Player video using jimaku.cc. Auto-finds the right file for the current episode.
 // @author       Inclushe (forked from repo by mgp25)
 // @match        *://*/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM.xmlHttpRequest
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @grant        GM_deleteValue
+// @grant        GM_listValues
 // @connect      jimaku.cc
 // @run-at       document-start
 // ==/UserScript==
@@ -124,19 +128,41 @@
 		stickGroup: true,
 		customCss: '',
 	};
+	// Persistence. Prefer the userscript manager's shared storage (GM_*) so the
+	// API key and settings carry across every site; fall back to per-site
+	// localStorage where GM storage isn't available (e.g. Userscripts on Safari).
+	// Existing localStorage values are read (and migrated into GM storage) the
+	// first time each key is requested, so nothing is lost on upgrade.
+	const HAS_GM = typeof GM_getValue === 'function' && typeof GM_setValue === 'function';
+	const MISS = Symbol('miss');
 	const get = (k, d) => {
-		try {
-			const raw = localStorage.getItem('jp:' + k);
-			return raw == null ? d : JSON.parse(raw);
-		} catch {
-			return d;
+		const key = 'jp:' + k;
+		if (HAS_GM) {
+			try {
+				const v = GM_getValue(key, MISS);
+				if (v !== MISS) return v;
+			} catch {}
 		}
+		// Not in GM storage (or no GM): read localStorage, migrating it up if we can.
+		try {
+			const raw = localStorage.getItem(key);
+			if (raw != null) {
+				const val = JSON.parse(raw);
+				if (HAS_GM) try { GM_setValue(key, val); } catch {}
+				return val;
+			}
+		} catch {}
+		return d;
 	};
 	const set = (k, v) => {
+		const key = 'jp:' + k;
+		if (HAS_GM) {
+			try { GM_setValue(key, v); return; } catch {}
+		}
 		try {
-			localStorage.setItem('jp:' + k, JSON.stringify(v));
+			localStorage.setItem(key, JSON.stringify(v));
 		} catch (e) {
-			warn('localStorage write failed', e);
+			warn('storage write failed', e);
 		}
 	};
 
@@ -151,19 +177,19 @@
 		currentSubIndex: -1,
 		detected: null,
 		apiKey: get(KEYS.apiKey, ''),
-		preferAss: get(KEYS.preferAss, true),
-		fontScale: get(KEYS.fontScale, 1),
-		outline: get(KEYS.outline, 2),
-		bgOpacity: get(KEYS.bgOpacity, 0.35),
-		fontFamily: get(KEYS.fontFamily, ''),
-		fontWeight: get(KEYS.fontWeight, 400),
-		position: get(KEYS.position, 'bottom'),
-		hideNative: get(KEYS.hideNative, true),
-		consumeKeys: get(KEYS.consumeKeys, true),
-		autoSub: get(KEYS.autoSub, true),
-		excludeChinese: get(KEYS.excludeChinese, true),
-		stickGroup: get(KEYS.stickGroup, true),
-		customCss: get(KEYS.customCss, ''),
+		preferAss: get(KEYS.preferAss, DEFAULTS.preferAss),
+		fontScale: get(KEYS.fontScale, DEFAULTS.fontScale),
+		outline: get(KEYS.outline, DEFAULTS.outline),
+		bgOpacity: get(KEYS.bgOpacity, DEFAULTS.bgOpacity),
+		fontFamily: get(KEYS.fontFamily, DEFAULTS.fontFamily),
+		fontWeight: get(KEYS.fontWeight, DEFAULTS.fontWeight),
+		position: get(KEYS.position, DEFAULTS.position),
+		hideNative: get(KEYS.hideNative, DEFAULTS.hideNative),
+		consumeKeys: get(KEYS.consumeKeys, DEFAULTS.consumeKeys),
+		autoSub: get(KEYS.autoSub, DEFAULTS.autoSub),
+		excludeChinese: get(KEYS.excludeChinese, DEFAULTS.excludeChinese),
+		stickGroup: get(KEYS.stickGroup, DEFAULTS.stickGroup),
+		customCss: get(KEYS.customCss, DEFAULTS.customCss),
 		entryCache: get(KEYS.entryCache, {}),
 		alignByShow: get(KEYS.alignBy, {}),
 		groupByShow: get(KEYS.groupByShow, {}),
@@ -693,7 +719,8 @@
 		.flatMap((a) => a.roots.map((r) => `${r}${a.controls} #jp-fab`))
 		.join(',\n\t');
 
-	const STYLES = `
+	// Overlay / button / caption-hiding CSS — injected into the page <head>.
+	const OVERLAY_STYLES = `
 	#jp-overlay {
 		container: normal / inline-size; position: absolute; left: 0; right: 0; pointer-events: none;
 		font-family: var(--jp-font, "Yu Gothic", "Meiryo", "Noto Sans JP", "Hiragino Sans", sans-serif);
@@ -741,7 +768,24 @@
 		100% { box-shadow: 0 0 0 0 rgba(74,222,128,0); }
 	}
 
+	/* Hide each player's native captions overlay when the user opts in */
+	${HIDE_CAPTIONS_CSS} {
+		display: none;
+		opacity: 0;
+		visibility: hidden;
+	}
+	html.jp-hide-native video::cue { opacity: 0 !important; }
+	`;
+
+	// Panel CSS — injected INSIDE the panel's shadow root so page stylesheets
+	// can't reach in and clash. ':host { all: initial }' also blocks the page's
+	// inherited styles (fonts/colors) from leaking across the boundary; every
+	// rule below then restates exactly what the panel needs.
+	const PANEL_STYLES = `
+	:host { all: initial !important; }
+	#jp-panel, #jp-panel *, #jp-panel *::before, #jp-panel *::after { box-sizing: border-box; }
 	#jp-panel {
+		font-size: 13px;
 		/* Lives on <body> (position: fixed) so the player's bounds/overflow can't
 		   clip it — important on mobile where the player is small. */
 		position: fixed; right: 12px; top: 12px; z-index: 2147483646;
@@ -829,20 +873,14 @@
 		font-family: ui-monospace, SFMono-Regular, monospace; font-size: 11px;
 		background: #2a2d3a; border-radius: 3px; padding: 1px 5px;
 	}
-
-	/* Hide each player's native captions overlay when the user opts in */
-	${HIDE_CAPTIONS_CSS} {
-		display: none;
-		opacity: 0;
-		visibility: hidden;
-	}
-	html.jp-hide-native video::cue { opacity: 0 !important; }
 	`;
 
 
 	var host = null;
 	var fab = null;
 	var panel = null;
+	var panelHost = null; // the light-DOM host carrying the panel's shadow root
+	var panelShadow = null;
 	var overlay = null;
 	var revealedOnce = false;
 	var dragging = false;
@@ -855,7 +893,7 @@
 		if (!head) return;
 		const s = document.createElement('style');
 		s.id = 'jp-styles';
-		s.textContent = STYLES;
+		s.textContent = OVERLAY_STYLES;
 		head.appendChild(s);
 	}
 
@@ -938,17 +976,22 @@
 	}
 
 	// User-supplied CSS, injected into its own <style> so it can target our
-	// overlay/panel or the host page's player. Re-applied whenever it changes.
+	// overlay or the host page's player. Re-applied whenever it changes. The panel
+	// is in a shadow root, so the same CSS is mirrored there too (otherwise rules
+	// targeting #jp-panel couldn't reach it).
 	function applyCustomCss() {
 		const head = document.head || document.documentElement;
-		if (!head) return;
-		let el = document.getElementById('jp-custom-css');
-		if (!el) {
-			el = document.createElement('style');
-			el.id = 'jp-custom-css';
-			head.appendChild(el);
+		if (head) {
+			let el = document.getElementById('jp-custom-css');
+			if (!el) {
+				el = document.createElement('style');
+				el.id = 'jp-custom-css';
+				head.appendChild(el);
+			}
+			if (el.textContent !== state.customCss) el.textContent = state.customCss || '';
 		}
-		if (el.textContent !== state.customCss) el.textContent = state.customCss || '';
+		const shadowEl = panelShadow && panelShadow.querySelector('#jp-shadow-custom-css');
+		if (shadowEl && shadowEl.textContent !== state.customCss) shadowEl.textContent = state.customCss || '';
 	}
 
 	// Renderer side: mount the overlay + 字 button inside the local player. Runs
@@ -1015,15 +1058,30 @@
 		return true;
 	}
 
-	// Controller side: create the #jp-panel on <body> (top frame only). Kept off
-	// the player element so the player's bounds/overflow can't clip it on mobile,
-	// and so it lives in the top frame when the player is in an iframe.
+	// Controller side: create the #jp-panel (top frame only). It lives inside a
+	// shadow root on a <body>-level host, so (a) the player's bounds/overflow
+	// can't clip it, (b) it's in the top frame when the player is in an iframe,
+	// and (c) the page's stylesheets can't reach in and clash with it.
 	function ensurePanel() {
 		if (!document.body) return;
 		ensureStyles();
 		applyCustomCss();
-		if (panel && document.body.contains(panel)) return;
-		document.getElementById('jp-panel')?.remove();
+		if (panelHost && document.body.contains(panelHost)) return;
+		document.getElementById('jp-panel-host')?.remove();
+
+		panelHost = document.createElement('div');
+		panelHost.id = 'jp-panel-host';
+		panelHost.style.cssText = 'all: initial;';
+		panelShadow = panelHost.attachShadow({ mode: 'open' });
+		const st = document.createElement('style');
+		st.textContent = PANEL_STYLES;
+		panelShadow.appendChild(st);
+		// User custom CSS, scoped into the shadow too, so rules targeting #jp-panel
+		// still apply despite the isolation.
+		const cssEl = document.createElement('style');
+		cssEl.id = 'jp-shadow-custom-css';
+		panelShadow.appendChild(cssEl);
+
 		panel = document.createElement('div');
 		panel.id = 'jp-panel';
 		// Don't let any click/mouse interaction inside the panel reach the player
@@ -1038,7 +1096,9 @@
 		panel.addEventListener('pointermove', onPanelDrag);
 		panel.addEventListener('pointerup', onPanelRelease);
 		panel.addEventListener('pointercancel', onPanelRelease);
-		document.body.appendChild(panel);
+		panelShadow.appendChild(panel);
+		document.body.appendChild(panelHost);
+		applyCustomCss();
 		// In split mode the top frame has no player to hotkey-guard, but we still
 		// want keys to work when the page (not the iframe) has focus.
 		wireHotkeys();
@@ -1907,25 +1967,52 @@
 		toast._t = setTimeout(() => (toastEl.style.opacity = '0'), 1800);
 	}
 
-	// Registered in the capture phase so we can stop our own hotkeys from reaching
-	// the player's keyboard handler (players bind many single letters). Attached
-	// once a player is mounted, or in the top frame once it's controlling a remote
-	// renderer, so it never fires on pages with no player.
+	// Hotkeys. Registered on window in the CAPTURE phase — the earliest point in
+	// dispatch — so we can swallow our keys before any player handler (on the
+	// document, the player element, or window) ever sees them. Players like
+	// JW Player otherwise act on the same key we do. We swallow keydown AND the
+	// matching keyup/keypress, since some players act on those too.
 	let hotkeysWired = false;
 	function wireHotkeys() {
 		if (hotkeysWired) return;
 		hotkeysWired = true;
-		document.addEventListener('keydown', onHotkey, true);
+		window.addEventListener('keydown', onHotkey, true);
+		window.addEventListener('keyup', swallowHotkey, true);
+		window.addEventListener('keypress', swallowHotkey, true);
+	}
+	// The real innermost target, seeing through our open shadow DOM (composedPath
+	// gives the shadow node; e.target would be the host element).
+	function hotkeyTarget(e) {
+		const path = typeof e.composedPath === 'function' ? e.composedPath() : null;
+		return (path && path[0]) || e.target;
+	}
+	function isTypingTarget(t) {
+		if (!t || !t.tagName) return false;
+		const tag = t.tagName;
+		return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t.isContentEditable;
+	}
+	function isHotkey(k) {
+		return 'jshibzx'.includes(k);
+	}
+	// keyup / keypress: consume our keys (in the frame with the player) so the
+	// player can't act on them, but never trigger an action.
+	function swallowHotkey(e) {
+		if (!state.consumeKeys || !findPlayer()) return;
+		if (e.metaKey || e.ctrlKey || e.altKey) return;
+		if (isTypingTarget(hotkeyTarget(e))) return;
+		if (!isHotkey((e.key || '').toLowerCase())) return;
+		e.preventDefault();
+		e.stopImmediatePropagation();
 	}
 	function onHotkey(e) {
-		if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+		if (isTypingTarget(hotkeyTarget(e))) return;
 		if (e.metaKey || e.ctrlKey || e.altKey) return;
 		const local = findPlayer();
 		// Act only when there's a player to drive: one in this frame, or (in the
 		// top frame) a paired renderer in an iframe.
 		if (!local && !(IS_TOP && paired)) return;
 		const k = e.key.toLowerCase();
-		if (!'jshibzx'.includes(k)) return;
+		if (!isHotkey(k)) return;
 		// Swallow the key before it reaches the player — only meaningful in the
 		// frame that actually holds the player.
 		if (state.consumeKeys && local) {
