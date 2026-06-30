@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jimaku Player Reloaded
 // @namespace    https://github.com/mgp25/jimaku-player-reloaded
-// @version      3.6.1
+// @version      3.7.0
 // @description  Browse, download, and align Japanese subtitles inside any Vidstack-based player using jimaku.cc. Auto-finds the right file for the current episode.
 // @author       mgp25
 // @match        *://*/*
@@ -33,6 +33,9 @@
 		entryCache: 'jimaku-entry-cache',
 		alignBy: 'jimaku-alignment-by-show',
 		fontScale: 'jimaku-font-scale',
+		outline: 'jimaku-outline',
+		bgOpacity: 'jimaku-bg-opacity',
+		fontFamily: 'jimaku-font-family',
 		position: 'jimaku-position',
 		hideNative: 'jimaku-hide-native-subs',
 		autoSub: 'jimaku-auto-sub',
@@ -70,6 +73,9 @@
 		apiKey: get(KEYS.apiKey, ''),
 		preferAss: get(KEYS.preferAss, true),
 		fontScale: get(KEYS.fontScale, 1),
+		outline: get(KEYS.outline, 2),
+		bgOpacity: get(KEYS.bgOpacity, 0.35),
+		fontFamily: get(KEYS.fontFamily, ''),
 		position: get(KEYS.position, 'bottom'),
 		hideNative: get(KEYS.hideNative, true),
 		autoSub: get(KEYS.autoSub, true),
@@ -551,7 +557,7 @@
 	const STYLES = `
 	#jp-overlay {
 		position: absolute; left: 0; right: 0; pointer-events: none;
-		font-family: "Yu Gothic", "Meiryo", "Noto Sans JP", "Hiragino Sans", sans-serif;
+		font-family: var(--jp-font, "Yu Gothic", "Meiryo", "Noto Sans JP", "Hiragino Sans", sans-serif);
 		z-index: 50; text-align: center;
 	}
 	#jp-overlay.bottom { bottom: 8%; }
@@ -561,8 +567,11 @@
 		max-width: 92%; padding: 6px 14px;
 		font-size: calc(2.4vw * var(--jp-scale, 1));
 		line-height: 1.45; color: #fff; white-space: pre-wrap; text-align: center;
-		-webkit-text-stroke: 2px #000; text-stroke: 2px #000; paint-order: stroke fill;
-		background: rgba(0,0,0,.35); border-radius: 4px;
+		/* Outline width scales with the font so it stays proportional. */
+		-webkit-text-stroke: calc(var(--jp-outline, 2px) * var(--jp-scale, 1)) #000;
+		text-stroke: calc(var(--jp-outline, 2px) * var(--jp-scale, 1)) #000;
+		paint-order: stroke fill;
+		background: rgba(0, 0, 0, var(--jp-bg-opacity, .35)); border-radius: 4px;
 		pointer-events: auto; cursor: pointer;
 	}
 
@@ -642,6 +651,11 @@
 		font-family: ui-monospace, SFMono-Regular, monospace; font-size: 12px;
 	}
 	#jp-panel input[type=number] { flex: 0 0 56px; }
+	#jp-panel select {
+		width: 100%; padding: 6px 8px; border-radius: 5px; border: 1px solid #333a50;
+		background: #11141d; color: #fff; font: inherit;
+	}
+	#jp-panel input[type=range] { width: 100%; accent-color: #e83450; }
 	#jp-panel button.btn { white-space: nowrap; flex-shrink: 0; }
 	#jp-panel button.btn {
 		background: #2a2d3a; color: #fff; border: 0; border-radius: 5px;
@@ -704,6 +718,32 @@
 		s.id = 'jp-styles';
 		s.textContent = STYLES;
 		document.head.appendChild(s);
+	}
+
+	// Preset font-family stacks offered in Settings → Style. Empty value = use the
+	// built-in default stack (the CSS var falls back to it).
+	const FONT_PRESETS = [
+		{ label: 'Default (Japanese gothic)', value: '' },
+		{ label: 'Gothic / sans-serif', value: '"Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP", sans-serif' },
+		{ label: 'Mincho / serif', value: '"Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif' },
+		{ label: 'Rounded', value: '"Hiragino Maru Gothic ProN", "Rounded Mplus 1c", sans-serif' },
+		{ label: 'Monospace', value: 'ui-monospace, "Noto Sans Mono CJK JP", monospace' },
+	];
+
+	// True when the chosen font isn't one of the presets (i.e. user-typed).
+	function styleIsCustomFont() {
+		return !!state.fontFamily && !FONT_PRESETS.some((p) => p.value === state.fontFamily);
+	}
+
+	// Push the user's Style settings to CSS custom properties on <html> so the
+	// overlay updates live without re-rendering anything.
+	function applyStyleVars() {
+		const root = document.documentElement.style;
+		root.setProperty('--jp-scale', String(state.fontScale));
+		root.setProperty('--jp-outline', state.outline + 'px');
+		root.setProperty('--jp-bg-opacity', String(state.bgOpacity));
+		if (state.fontFamily) root.setProperty('--jp-font', state.fontFamily);
+		else root.removeProperty('--jp-font');
 	}
 
 	// User-supplied CSS, injected into its own <style> so it can target our
@@ -781,7 +821,7 @@
 				if (t) window.open('https://jisho.org/search/' + encodeURIComponent(t), '_blank');
 			});
 
-			document.documentElement.style.setProperty('--jp-scale', String(state.fontScale));
+			applyStyleVars();
 			renderPanel();
 			info('mounted on player container', container.tagName.toLowerCase());
 
@@ -1071,8 +1111,25 @@
 
 				<label class="row" style="margin-top:8px"><input type="checkbox" id="jp-prefer-ass" ${state.preferAss ? 'checked' : ''}> Prefer ASS files when available</label>
 
-				<label>Subtitle font scale (${Math.round(state.fontScale * 100)}%)</label>
+				<div style="margin-top:12px;border-top:1px solid #2c2c3a;padding-top:10px;font-weight:700">Style</div>
+
+				<label id="jp-scale-label">Font size (${Math.round(state.fontScale * 100)}%)</label>
 				<input id="jp-scale" type="range" min="0.6" max="2.5" step="0.1" value="${state.fontScale}">
+
+				<label id="jp-outline-label">Outline size (${state.outline.toFixed(1)}px · scales with font)</label>
+				<input id="jp-outline" type="range" min="0" max="6" step="0.5" value="${state.outline}">
+
+				<label id="jp-bg-opacity-label">Background opacity (${Math.round(state.bgOpacity * 100)}%)</label>
+				<input id="jp-bg-opacity" type="range" min="0" max="1" step="0.05" value="${state.bgOpacity}">
+
+				<label>Font family</label>
+				<select id="jp-font-family">
+					${FONT_PRESETS.map((p) => `<option value="${escapeAttr(p.value)}" ${state.fontFamily === p.value ? 'selected' : ''}>${escapeHtml(p.label)}</option>`).join('')}
+					<option value="__custom__" ${styleIsCustomFont() ? 'selected' : ''}>Custom…</option>
+				</select>
+				<input id="jp-font-custom" type="text" spellcheck="false" placeholder='e.g. "Klee One", cursive'
+					value="${escapeAttr(styleIsCustomFont() ? state.fontFamily : '')}"
+					style="margin-top:6px;width:100%;box-sizing:border-box;${styleIsCustomFont() ? '' : 'display:none'}">
 
 				<label>Position</label>
 				<div class="row">
@@ -1173,9 +1230,44 @@
 			});
 			panel.querySelector('#jp-scale')?.addEventListener('input', (ev) => {
 				state.fontScale = parseFloat(ev.target.value);
-				document.documentElement.style.setProperty('--jp-scale', String(state.fontScale));
+				applyStyleVars();
 				set(KEYS.fontScale, state.fontScale);
-				renderPanel();
+				const lbl = panel.querySelector('#jp-scale-label');
+				if (lbl) lbl.textContent = `Font size (${Math.round(state.fontScale * 100)}%)`;
+			});
+			panel.querySelector('#jp-outline')?.addEventListener('input', (ev) => {
+				state.outline = parseFloat(ev.target.value);
+				applyStyleVars();
+				set(KEYS.outline, state.outline);
+				const lbl = panel.querySelector('#jp-outline-label');
+				if (lbl) lbl.textContent = `Outline size (${state.outline.toFixed(1)}px · scales with font)`;
+			});
+			panel.querySelector('#jp-bg-opacity')?.addEventListener('input', (ev) => {
+				state.bgOpacity = parseFloat(ev.target.value);
+				applyStyleVars();
+				set(KEYS.bgOpacity, state.bgOpacity);
+				const lbl = panel.querySelector('#jp-bg-opacity-label');
+				if (lbl) lbl.textContent = `Background opacity (${Math.round(state.bgOpacity * 100)}%)`;
+			});
+			const fontCustom = panel.querySelector('#jp-font-custom');
+			panel.querySelector('#jp-font-family')?.addEventListener('change', (ev) => {
+				if (ev.target.value === '__custom__') {
+					if (fontCustom) {
+						fontCustom.style.display = '';
+						fontCustom.focus();
+						state.fontFamily = fontCustom.value.trim();
+					}
+				} else {
+					if (fontCustom) fontCustom.style.display = 'none';
+					state.fontFamily = ev.target.value;
+				}
+				applyStyleVars();
+				set(KEYS.fontFamily, state.fontFamily);
+			});
+			fontCustom?.addEventListener('input', () => {
+				state.fontFamily = fontCustom.value.trim();
+				applyStyleVars();
+				set(KEYS.fontFamily, state.fontFamily);
 			});
 			panel.querySelectorAll('[data-pos]').forEach((b) => {
 				b.onclick = () => {
