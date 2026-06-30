@@ -51,11 +51,11 @@
 	// intentionally excluded.
 	const DEFAULTS = {
 		preferAss: true,
-		fontScale: 1,
-		outline: 2,
+		fontScale: 1.6,
+		outline: 1.5,
 		bgOpacity: 0.35,
-		fontFamily: '',
-		fontWeight: 400,
+		fontFamily: '"Hiragino Maru Gothic ProN", "Rounded Mplus 1c", sans-serif',
+		fontWeight: 700,
 		position: 'bottom',
 		hideNative: true,
 		consumeKeys: true,
