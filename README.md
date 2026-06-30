@@ -1,13 +1,28 @@
-# Jimaku Player Reloaded
-## 字幕プレーヤー・リローデッド
+# Jimaku Player Revolutions
 
 <p align="center">
-  <img src="assets/screenshot.png" alt="Jimaku Player Reloaded rendering a Japanese subtitle over a video">
+  <img src="assets/screenshot.jpg" alt="Jimaku Player Revolutions rendering a Japanese subtitle over a video">
 </p>
 
 A userscript that adds a Japanese-subtitle layer to **any site that uses [Vidstack Player](https://vidstack.io)**. It browses [jimaku.cc](https://jimaku.cc), downloads `.srt` / `.ass` / `.vtt` files for the show you're watching, and renders them on top of the video — synced with one keypress.
 
 Built for studying Japanese with anime.
+
+## Install
+
+1. Add a userscript manager like Tampermonkey or Violentmonkey:
+   - **Chrome / Firefox / Edge:** [Tampermonkey](https://www.tampermonkey.net/) or [Violentmonkey](https://violentmonkey.github.io/)
+   - **Safari:** [Userscripts](https://apps.apple.com/app/userscripts/id1463298887) (free, open-source)
+2. Install the userscript from Github
+   - **[Open directly in Tampermonkey / Violentmonkey](https://github.com/Inclushe/jimaku-player-revolutions/raw/refs/heads/main/jimaku-player-revolutions.user.js)**
+   - Or open `jimaku-player-revolutions.user.js` above and click **Raw**
+3. Open a website that uses Vidstack Player and click the **字** button.
+4. Add your Jimaku API key (free) in Settings.
+   1. Open <https://jimaku.cc> and create an account.
+   2. Go to <https://jimaku.cc/account> and copy your API key.
+   3. On any page with a Vidstack player, hover the player → click the small **字** button at the top-right → **Settings** tab → paste the key → **Save**.
+
+The script runs on every site (`@match *://*/*`) but stays completely idle until it detects a Vidstack `<media-player>` on the page, at which point the **字** button appears on the player. The Jimaku API is stored locally only, and is never sent anywhere except jimaku.cc itself.
 
 ## What it does
 
@@ -22,25 +37,6 @@ Built for studying Japanese with anime.
 - Renders the subtitles directly over the video. Click a line to open it in [jisho.org](https://jisho.org).
 - Sync them to the audio with a single keypress.
 - Remembers your alignment per show + site, so episodes 2..N inherit it.
-
-## Install
-
-Works in any major userscript manager:
-
-- **Chrome / Firefox / Edge:** [Tampermonkey](https://www.tampermonkey.net/) or [Violentmonkey](https://violentmonkey.github.io/).
-- **Safari:** [Userscripts](https://apps.apple.com/app/userscripts/id1463298887) (free, open-source).
-
-Then install the script from `jimaku-player-revolutions.user.js` (open the file → your manager will prompt you to install). Or paste the file contents into a new script in the manager dashboard.
-
-The script runs on every site (`@match *://*/*`) but stays completely idle until it detects a Vidstack `<media-player>` on the page, at which point the **字** button appears on the player.
-
-## Setup (one time)
-
-1. Open <https://jimaku.cc> and create an account.
-2. Go to <https://jimaku.cc/account> and copy your API key.
-3. On any page with a Vidstack player, hover the player → click the small **字** button at the top-right → **Settings** tab → paste the key → **Save**.
-
-Stored locally only. Never sent anywhere except jimaku.cc itself.
 
 ## Use
 
