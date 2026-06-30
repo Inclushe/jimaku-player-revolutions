@@ -76,18 +76,6 @@ By default these keys are **consumed** so they don't also trigger the player's o
 
 Clicking a rendered subtitle opens [jisho.org](https://jisho.org) for that text. Useful for looking up unknown words mid-episode.
 
-### Review what you pick up
-
-<a href="https://apps.apple.com/es/app/meku/id6759989326?l=en-GB"><img src="https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/4f/02/52/4f02526b-c1c1-b7fe-46da-b18fbe2f7718/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg" width="96" align="right" alt="Meku app icon"></a>
-
-Looking words up mid-episode is only half the loop — the other half is actually retaining them. [**Meku**](https://apps.apple.com/es/app/meku/id6759989326?l=en-GB) (iOS) is a flashcards app built for exactly this: drop in the vocab and sentences you find while watching, and review them later. Pairs naturally with this script — encounter a word while watching, look it up on jisho, drill it on Meku.
-
-<p align="center">
-  <a href="https://apps.apple.com/es/app/meku/id6759989326?l=en-GB">
-    <img src="https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/8e/e7/25/8ee72521-c6b0-92a9-48b8-c9872adc28e9/ios_1_1.png/600x1300bb.png" width="200" alt="Meku — Study with spaced repetitions">
-  </a>
-</p>
-
 ## Limitations
 
 - **Burned-in subtitles can't be removed.** If a site ships hard-subbed video, those stay. The script can hide the player's own caption track (Settings → it disables the player's native captions), or you can move our subtitles to the top (Settings → Position).
@@ -125,7 +113,8 @@ The native [anitomy](https://github.com/yjl9903/anitomy) filename parser is vend
 
 ## Credits
 
-- **[sheodox/jimaku-player](https://github.com/sheodox/jimaku-player)** — original userscript and the SRT/ASS parser logic. Read the original for VRV nostalgia.
+- **[sheodox/jimaku-player](https://github.com/sheodox/jimaku-player)** — original userscript and the SRT/ASS parser logic.
+- **[github.com/mgp25/Jimaku-Player-Reloaded](https://github.com/mgp25/Jimaku-Player-Reloaded)** — forked from this code.
 - **[jimaku.cc](https://jimaku.cc)** — the Japanese-subtitle archive and API this script depends on.
 - **[jisho.org](https://jisho.org)** — Japanese-English dictionary used for word lookups.
 - **[yjl9903/anitomy](https://github.com/yjl9903/anitomy)** — native JavaScript port of Anitomy (MIT), vendored into the script to parse release filenames for auto-loading.
